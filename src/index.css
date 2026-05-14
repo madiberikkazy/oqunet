@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    @apply font-sans text-ink-900 antialiased;
+    background: #e9eef3;
+  }
+}
+
+@layer components {
+  .card { @apply bg-white rounded-2xl shadow-soft; }
+  .input { @apply w-full bg-ink-100 rounded-xl px-4 py-3 text-[15px] placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:bg-white transition; }
+  .btn-primary { @apply w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl py-3.5 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-secondary { @apply w-full bg-ink-100 hover:bg-ink-100/80 text-ink-900 font-semibold rounded-xl py-3.5 transition; }
+  .pill { @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium; }
+  .icon-btn { @apply w-10 h-10 inline-flex items-center justify-center rounded-xl bg-ink-100 text-ink-700 hover:bg-ink-100/80 transition; }
+  .section-title { @apply text-[15px] font-semibold text-ink-900; }
+}
+
+.mobile-shell {
+  max-width: 420px;
+  margin: 0 auto;
+  background: #ffffff;
+  min-height: 100vh;
+  position: relative;
+  box-shadow: 0 8px 40px rgba(15, 23, 36, 0.08);
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
