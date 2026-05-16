@@ -10,11 +10,8 @@ import { db, isFirebaseConfigured } from "./config.js";
 // ---------- localStorage fallback ----------
 const LS_KEY = "oqunet:db";
 function readLS() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY)) || emptyDb();
-  } catch {
-    return emptyDb();
-  }
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || emptyDb(); }
+  catch { return emptyDb(); }
 }
 function emptyDb() {
   return {
@@ -173,14 +170,46 @@ export async function listPostsByCommunity(communityId, pageSize = 30) {
 }
 
 // ---------- Notifications ----------
-export async function createNotification(payload) { return createOne("notifications", payload); }
-export async function listNotifications(userId) {
-  return getCollection("notifications", {
-    where: [["recipientId", "==", userId]], orderByField: "createdAt", descending: true,
-  });
+export async function createNotification(payload) {
+  return createOne("notifications", payload);
 }
-export async function markNotificationRead(id) { return updateOne("notifications", id, { read: true }); }
-export async function deleteNotification(id) { return deleteOne("notifications", id); }
+
+export async function getNotificationById(id) {
+  return getOne("notifications", id);
+}
+
+// Fetch without orderBy to avoid Firestore silently skipping docs
+// whose serverTimestamp() hasn't resolved yet; sort client-side instead.
+export async function listNotifications(userId) {
+  if (isFirebaseConfigured) {
+    const q = query(
+      collection(db, "notifications"),
+      where("recipientId", "==", userId)
+    );
+    const snap = await getDocs(q);
+    const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    rows.sort((a, b) => {
+      const at = a.createdAt?.toMillis?.() ?? a.createdAt ?? 0;
+      const bt = b.createdAt?.toMillis?.() ?? b.createdAt ?? 0;
+      return bt - at;
+    });
+    return rows;
+  }
+  const data = readLS();
+  const rows = (data.notifications || []).filter((n) => n.recipientId === userId);
+  rows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+  return rows;
+}
+
+export async function markNotificationRead(id) {
+  return updateOne("notifications", id, { read: true });
+}
+export async function updateNotification(id, patch) {
+  return updateOne("notifications", id, patch);
+}
+export async function deleteNotification(id) {
+  return deleteOne("notifications", id);
+}
 
 // ---------- Join requests ----------
 export async function createJoinRequest(payload) {
@@ -194,10 +223,19 @@ export async function listJoinRequests(communityId) {
 export async function updateJoinRequest(id, patch) { return updateOne("requests", id, patch); }
 
 // ---------- Borrowings ----------
-export async function createBorrowing(payload) { return createOne("borrowings", { status: "active", ...payload }); }
+export async function createBorrowing(payload) {
+  return createOne("borrowings", { status: "active", ...payload });
+}
 export async function getActiveBorrowingForUser(userId) {
   const rows = await getCollection("borrowings", {
     where: [["borrowerId", "==", userId], ["status", "==", "active"]],
+  });
+  return rows[0] || null;
+}
+// Get the active borrowing for a specific book (to find current holder + pickup code)
+export async function getActiveBorrowingByBook(bookId) {
+  const rows = await getCollection("borrowings", {
+    where: [["bookId", "==", bookId], ["status", "==", "active"]],
   });
   return rows[0] || null;
 }

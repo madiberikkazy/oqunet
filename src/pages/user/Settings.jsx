@@ -12,14 +12,20 @@ export default function Settings() {
   const { community } = useCommunity();
 
   async function trySwitchRole() {
-    if (user.role !== "admin") {
-      if (!community) { navigate("/community/create"); return; }
-    } else {
+    if (user.role === "admin") {
+      // Admin → user: check no active borrowing first
       const active = await getActiveBorrowingForUser(user.id);
-      if (active) { alert("Сначала верните взятую книгу."); return; }
+      if (active) {
+        alert("Сначала верните взятую книгу.");
+        return;
+      }
+      await switchRole();
+      navigate("/", { replace: true });
+    } else {
+      // User → admin: always requires creating a brand-new community.
+      // They cannot become admin of the community they already belong to as a member.
+      navigate("/community/create");
     }
-    await switchRole();
-    navigate("/", { replace: true });
   }
 
   return (
@@ -48,13 +54,18 @@ export default function Settings() {
         <button onClick={trySwitchRole} className="btn-secondary">
           {user.role === "admin" ? t.switchToUser : t.switchToAdmin}
         </button>
-        {user.role !== "admin" && !community ? (
-          <p className="text-[12px] text-ink-500 mt-2">Чтобы стать админом, сначала создайте сообщество.</p>
-        ) : null}
+        <p className="text-[12px] text-ink-500 mt-2">
+          {user.role === "admin"
+            ? "Переключение в режим пользователя не удалит ваше сообщество."
+            : "Чтобы стать администратором, вам нужно создать новое сообщество."}
+        </p>
 
         <h3 className="section-title mt-6 mb-2">Аккаунт</h3>
         <button
-          onClick={async () => { await signOut(); navigate("/auth/login", { replace: true }); }}
+          onClick={async () => {
+            await signOut();
+            navigate("/auth/login", { replace: true });
+          }}
           className="w-full text-left rounded-xl bg-badSoft text-bad font-semibold py-3 px-4"
         >
           {t.logOut}

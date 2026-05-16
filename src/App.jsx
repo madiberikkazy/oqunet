@@ -7,8 +7,9 @@ import Login from "./pages/auth/Login.jsx";
 import Home from "./pages/user/Home.jsx";
 import Books from "./pages/user/Books.jsx";
 import BookDetail from "./pages/user/BookDetail.jsx";
-import RequestBook from "./pages/user/RequestBook.jsx";
+import PickupBook from "./pages/user/PickupBook.jsx";
 import Notification from "./pages/user/Notification.jsx";
+import NotificationDetail from "./pages/user/NotificationDetail.jsx";
 import Profile from "./pages/user/Profile.jsx";
 import Settings from "./pages/user/Settings.jsx";
 
@@ -40,10 +41,16 @@ export default function App() {
         <Route path="/" element={<RoleRoute userElement={<Home />} adminElement={<AdminHome />} />} />
         <Route path="/books" element={<RoleRoute userElement={<Books />} adminElement={<AdminBooks />} />} />
         <Route path="/books/:id" element={<BookDetail />} />
-        <Route path="/books/:id/request" element={<RequestBook />} />
+
+        {/* Pickup flow — replaces the old /request route */}
+        <Route path="/books/:id/pickup" element={<PickupBook />} />
+
         <Route path="/books/add" element={<AddBook />} />
 
         <Route path="/notifications" element={<RoleRoute userElement={<Notification />} adminElement={<AdminNotification />} />} />
+        {/* Notification detail — shared between user and admin */}
+        <Route path="/notifications/:id" element={<NotificationDetail />} />
+
         <Route path="/profile" element={<RoleRoute userElement={<Profile />} adminElement={<AdminProfile />} />} />
         <Route path="/settings" element={<Settings />} />
 

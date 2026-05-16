@@ -23,7 +23,10 @@ export default function CreateCommunity() {
   function next() {
     setError("");
     if (step === 1) {
-      if (!form.nickname.trim() || !form.name.trim()) { setError("Заполните оба поля"); return; }
+      if (!form.nickname.trim() || !form.name.trim()) {
+        setError("Заполните оба поля");
+        return;
+      }
     }
     if (step < 3) { setStep(step + 1); return; }
     submit();
@@ -34,25 +37,55 @@ export default function CreateCommunity() {
     try {
       let photoURL = form.photoURL;
       if (photoFile) photoURL = await uploadImage(photoFile, `communities/${form.nickname}`);
+
+      // Create the new community
       const c = await createCommunity({
-        ...form, photoURL, ownerId: user.id, memberIds: [user.id], createdAt: Date.now(),
+        ...form,
+        photoURL,
+        ownerId: user.id,
+        memberIds: [user.id],
+        createdAt: Date.now(),
       });
-      await updateUser(user.id, { communityId: c.id, role: "admin" });
+
+      // Update user: set new communityId and promote to admin.
+      // If they were a member of another community before, communityId is replaced.
+      await updateUser(user.id, {
+        communityId: c.id,
+        role: "admin",
+      });
+
       setCommunity(c);
-      refresh();
+      await refresh();
       navigate("/", { replace: true });
-    } catch (err) { setError(err?.message || "Ошибка создания"); }
-    finally { setSubmitting(false); }
+    } catch (err) {
+      setError(err?.message || "Ошибка создания");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <MobileShell withNav={false}>
       <div className="flex items-center gap-2 px-4">
-        <button onClick={() => (step > 1 ? setStep(step - 1) : navigate(-1))} className="icon-btn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        <button
+          onClick={() => (step > 1 ? setStep(step - 1) : navigate(-1))}
+          className="icon-btn"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </button>
-        <div className="flex-1"><Stepper step={step} total={3} title="Новое сообщество" /></div>
+        <div className="flex-1">
+          <Stepper step={step} total={3} title="Новое сообщество" />
+        </div>
       </div>
+
+      {/* Info banner — only shown if user is already in a community as a member */}
+      {user?.communityId && user?.role !== "admin" ? (
+        <div className="mx-4 mt-3 px-4 py-3 bg-warnSoft text-warn rounded-xl text-[13px]">
+          Вы покинете текущее сообщество и станете администратором нового.
+        </div>
+      ) : null}
 
       <div className="px-5 pt-3 pb-24 space-y-3">
         {step === 1 ? (
@@ -60,13 +93,17 @@ export default function CreateCommunity() {
             <h2 className="text-xl font-bold mb-2">Шаг 1 — Основное</h2>
             <input
               value={form.nickname}
-              onChange={(e) => setForm({ ...form, nickname: e.target.value.replace(/\s/g, "").toLowerCase() })}
-              placeholder={t.communityNickname + " (aiu.oqyrman)"} className="input"
+              onChange={(e) =>
+                setForm({ ...form, nickname: e.target.value.replace(/\s/g, "").toLowerCase() })
+              }
+              placeholder={t.communityNickname + " (aiu.oqyrman)"}
+              className="input"
             />
             <input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder={t.communityName} className="input"
+              placeholder={t.communityName}
+              className="input"
             />
           </>
         ) : null}
@@ -75,10 +112,15 @@ export default function CreateCommunity() {
           <>
             <h2 className="text-xl font-bold mb-2">Шаг 2 — Уведомления</h2>
             <label className="card p-4 flex items-center gap-3">
-              <input type="checkbox" checked={form.notificationsEnabled}
+              <input
+                type="checkbox"
+                checked={form.notificationsEnabled}
                 onChange={(e) => setForm({ ...form, notificationsEnabled: e.target.checked })}
-                className="w-5 h-5 accent-brand-500" />
-              <span className="text-[14px]">Включить системные уведомления для участников</span>
+                className="w-5 h-5 accent-brand-500"
+              />
+              <span className="text-[14px]">
+                Включить системные уведомления для участников
+              </span>
             </label>
           </>
         ) : null}
@@ -98,9 +140,19 @@ export default function CreateCommunity() {
                   <span className="text-[13px] mt-2">{t.addPhoto}</span>
                 </span>
               )}
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+              />
             </label>
-            <input value={form.photoURL} onChange={(e) => setForm({ ...form, photoURL: e.target.value })} placeholder={t.orPasteUrl} className="input" />
+            <input
+              value={form.photoURL}
+              onChange={(e) => setForm({ ...form, photoURL: e.target.value })}
+              placeholder={t.orPasteUrl}
+              className="input"
+            />
           </>
         ) : null}
 

@@ -45,18 +45,26 @@ export default function BookDetail() {
 
   const ratingCount = ratings.length;
   const ratingAvg = ratingCount ? ratings.reduce((s, r) => s + r.value, 0) / ratingCount : 0;
-  const canBorrow = book.status === "available" && book.ownerId !== user.id;
+
+  const isAdmin = user?.role === "admin";
+  const isOwner = book.ownerId === user?.id;
+  // Admins can't borrow; owners can't borrow their own book.
+  // Available OR unavailable books can both be picked up — the pickup page handles the code flow.
+  const canPickup = !isAdmin && !isOwner;
 
   return (
     <MobileShell>
       <SearchBar value="" onChange={() => {}} onBack={() => navigate(-1)} placeholder="Search..." />
 
       <div className="px-4 pt-4 flex gap-3">
-        <img src={book.coverUrl} alt={book.name} className="w-[110px] h-[145px] rounded-lg object-cover bg-ink-100" />
+        <img src={book.coverUrl} alt={book.name}
+          className="w-[110px] h-[145px] rounded-lg object-cover bg-ink-100" />
         <div className="flex-1 flex flex-col">
           <h1 className="text-2xl font-bold leading-tight">{book.name}</h1>
           <p className="text-[15px] text-ink-500 mt-1">{book.author}</p>
-          <div className="mt-3"><BookStatusBadge status={book.status} daysLeft={book.daysLeft} /></div>
+          <div className="mt-3">
+            <BookStatusBadge status={book.status} daysLeft={book.daysLeft} />
+          </div>
         </div>
       </div>
 
@@ -111,7 +119,7 @@ export default function BookDetail() {
         )}
       </section>
 
-      {owner && book.ownerId !== user.id ? (
+      {owner && !isOwner ? (
         <section className="px-4 mt-5">
           <h3 className="section-title mb-2">Владелец</h3>
           <Link to={`/users/${owner.id}`} className="card flex items-center gap-3 px-3 py-3">
@@ -124,13 +132,25 @@ export default function BookDetail() {
         </section>
       ) : null}
 
-      <div className="px-4 mt-6">
-        <button disabled={!canBorrow} onClick={() => navigate(`/books/${id}/request`)} className="btn-primary">
-          {t.borrowBook}
-        </button>
-        {!canBorrow && book.ownerId !== user.id ? (
-          <p className="text-center text-[12px] text-ink-500 mt-2">Книга сейчас недоступна</p>
-        ) : null}
+      <div className="px-4 mt-6 mb-2">
+        {isAdmin ? (
+          <p className="text-center text-[13px] text-ink-500 py-3 bg-ink-100 rounded-xl">
+            Администраторы не могут брать книги. Переключитесь в режим пользователя в настройках.
+          </p>
+        ) : isOwner ? (
+          <p className="text-center text-[13px] text-ink-500 py-3 bg-ink-100 rounded-xl">
+            Это ваша книга.
+          </p>
+        ) : (
+          // Always show the pickup button regardless of availability —
+          // the pickup page handles the code verification when book is unavailable.
+          <button
+            onClick={() => navigate(`/books/${id}/pickup`)}
+            className="btn-primary"
+          >
+            {book.status === "unavailable" ? "Получить книгу (нужен код)" : t.borrowBook}
+          </button>
+        )}
       </div>
     </MobileShell>
   );

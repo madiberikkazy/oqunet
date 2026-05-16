@@ -53,15 +53,17 @@ export async function registerWithEmail({
     nickname,
     firstName,
     lastName,
-    // Password is only stored in the local mock layer (so nickname-login can verify).
-    // When Firebase is configured we let Firebase Auth handle credentials.
-    password: isFirebaseConfigured ? undefined : password,
     notificationsEnabled: Boolean(notificationsEnabled),
     photoURL: photoURL || "",
     role: "user",
     communityId: null,
     createdAt: Date.now(),
   };
+  // Password is only stored in the local mock layer (so nickname-login can verify).
+  // When Firebase is configured we let Firebase Auth handle credentials.
+  if (!isFirebaseConfigured) {
+    profile.password = password;
+  }
   await createUserDoc(profile);
   writeMock({ uid });
   return profile;
