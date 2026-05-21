@@ -11,6 +11,7 @@ import {
   fulfillPickupRequest,
   createBorrowing,
   updateBorrowing,
+  updatePickupRequest,
   updateBook,
   createNotification,
 } from "../../firebase/firestore.js";
@@ -88,25 +89,33 @@ export default function PickupBook() {
     setResending(true);
     setResent(false);
     try {
-      if (existingBorrowing?.pickupCode) {
+      const newCode = makeCode();
+
+      if (existingBorrowing) {
+        // Refresh the code on the active borrowing so the holder sees a new one
+        await updateBorrowing(existingBorrowing.id, { pickupCode: newCode });
+        setExistingBorrowing((prev) => ({ ...prev, pickupCode: newCode }));
         await createNotification({
           recipientId: existingBorrowing.borrowerId,
-          title: "Напоминание: код для передачи книги",
-          body: `${user.firstName} ${user.lastName} ждёт код для получения книги «${book.name}». Назовите ему ваш 4-значный код:`,
+          title: "Жаңа код: кітап беру",
+          body: `${user.firstName} ${user.lastName} «${book.name}» кітабын алғысы келеді. Жаңа 4 таңбалы код:`,
           read: false,
           type: "pickup-request",
           bookId: id,
-          pickupCode: existingBorrowing.pickupCode,
+          pickupCode: newCode,
         });
-      } else if (pickupRequest?.pickupCode) {
+      } else if (pickupRequest) {
+        // Refresh the code on the pickup request so the owner sees a new one
+        await updatePickupRequest(pickupRequest.id, { pickupCode: newCode });
+        setPickupRequest((prev) => ({ ...prev, pickupCode: newCode }));
         await createNotification({
           recipientId: book.ownerId,
-          title: "Напоминание: код для передачи книги",
-          body: `${user.firstName} ${user.lastName} ждёт код для получения книги «${book.name}». Назовите ему ваш 4-значный код:`,
+          title: "Жаңа код: кітап беру",
+          body: `${user.firstName} ${user.lastName} «${book.name}» кітабын алғысы келеді. Жаңа 4 таңбалы код:`,
           read: false,
           type: "borrow-request",
           bookId: id,
-          pickupCode: pickupRequest.pickupCode,
+          pickupCode: newCode,
         });
       }
       setResent(true);
@@ -144,10 +153,11 @@ export default function PickupBook() {
         const active = await getActiveBorrowingForUser(user.id);
         if (active && active.bookId !== id) { setError("Сначала верните взятую вами книгу."); return; }
 
-        const newCode = makeCode();
-        // returnDate is computed from NOW (actual handoff day), not from when page loaded
         const actualReturnTs = addDays(Date.now(), loanDays).getTime();
+        // Mark old borrowing as completed
         await updateBorrowing(existingBorrowing.id, { status: "completed" });
+        // Create new borrowing for new reader — pickupCode will be generated fresh
+        // when the NEXT reader requests the book; no code needed yet
         await createBorrowing({
           bookId: id,
           bookName: book.name,
@@ -157,18 +167,21 @@ export default function PickupBook() {
           startDate: Date.now(),
           returnDate: actualReturnTs,
           status: "active",
-          pickupCode: newCode,
+          pickupCode: makeCode(), // stored silently, only revealed when next reader requests
         });
-        await updateBook(id, { status: "unavailable", borrowerId: user.id });
-        await createNotification({
-          recipientId: book.ownerId,
-          title: "Книга передана новому читателю",
-          body: `«${book.name}» теперь у ${user.firstName} ${user.lastName} (@${user.nickname}). Новый код для следующей передачи:`,
-          read: false,
-          type: "book-transferred",
-          bookId: id,
-          pickupCode: newCode,
-        });
+        // Update book: mark unavailable, set borrowerId (= current holder)
+        await updateBook(id, { status: "unavailable", borrowerId: user.id, holderId: user.id });
+        // Notify owner — no code, just info
+        if (book.ownerId && book.ownerId !== user.id) {
+          await createNotification({
+            recipientId: book.ownerId,
+            title: "Кітап жаңа оқырманда",
+            body: `«${book.name}» кітабы енді ${user.firstName} ${user.lastName} (@${user.nickname}) қолында.`,
+            read: false,
+            type: "book-transferred",
+            bookId: id,
+          });
+        }
         if (pickupRequest?.id) await fulfillPickupRequest(pickupRequest.id);
         setSuccess(true);
       } catch (err) {
@@ -192,9 +205,7 @@ export default function PickupBook() {
         return;
       }
 
-      // returnDate computed from NOW (actual handoff day)
       const actualReturnTs = addDays(Date.now(), loanDays).getTime();
-      const newCode = makeCode();
       await createBorrowing({
         bookId: id,
         bookName: book.name,
@@ -204,18 +215,21 @@ export default function PickupBook() {
         startDate: Date.now(),
         returnDate: actualReturnTs,
         status: "active",
-        pickupCode: newCode,
+        pickupCode: makeCode(), // stored silently, used only when next reader requests
       });
-      await updateBook(id, { status: "unavailable", borrowerId: user.id });
-      await createNotification({
-        recipientId: book.ownerId,
-        title: "Книга передана",
-        body: `${user.firstName} ${user.lastName} получил вашу книгу «${book.name}». Новый код для следующей передачи:`,
-        read: false,
-        type: "book-transferred",
-        bookId: id,
-        pickupCode: newCode,
-      });
+      // Update book: set holderId = new reader
+      await updateBook(id, { status: "unavailable", borrowerId: user.id, holderId: user.id });
+      // Notify owner — just confirmation, no code
+      if (book.ownerId && book.ownerId !== user.id) {
+        await createNotification({
+          recipientId: book.ownerId,
+          title: "Кітап берілді",
+          body: `${user.firstName} ${user.lastName} сіздің «${book.name}» кітабыңызды алды.`,
+          read: false,
+          type: "book-transferred",
+          bookId: id,
+        });
+      }
       if (pickupRequest?.id) await fulfillPickupRequest(pickupRequest.id);
       setSuccess(true);
     } catch (err) {

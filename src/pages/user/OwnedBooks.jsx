@@ -18,7 +18,15 @@ export default function OwnedBooks() {
   useEffect(() => {
     if (!user || !community?.id) { setLoading(false); return; }
     listBooks({ communityId: community.id }).then((rows) => {
-      setBooks(rows.filter((b) => b.ownerId === user.id));
+      // "Books you currently have" = books you physically hold right now:
+      // 1. You own it AND it's available (not lent out) → you have it
+      // 2. You're the active borrower (borrowerId === you) → you have it
+      const yours = rows.filter(
+        (b) =>
+          (b.ownerId === user.id && b.status !== "unavailable") ||
+          (b.borrowerId === user.id && b.status === "unavailable")
+      );
+      setBooks(yours);
       setLoading(false);
     });
   }, [user?.id, community?.id]);

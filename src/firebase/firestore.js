@@ -243,6 +243,11 @@ export async function getPickupRequest(bookId, requesterId) {
   return rows.find((r) => r.bookId === bookId) || null;
 }
 
+/** Update any field on a pickup request (e.g. refresh the pickupCode). */
+export async function updatePickupRequest(id, patch) {
+  return updateOne("requests", id, patch);
+}
+
 /** Mark a pickup request as cancelled. */
 export async function cancelPickupRequest(id) {
   return updateOne("requests", id, { status: "cancelled" });
