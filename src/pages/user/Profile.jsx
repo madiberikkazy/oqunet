@@ -22,9 +22,13 @@ export default function Profile() {
       if (!user) return;
       const readingList = await listBorrowingsForUser(user.id, "active");
       const completed   = await listBorrowingsForUser(user.id, "completed");
-      const owned = community?.id
-        ? (await listBooks({ communityId: community.id })).filter((b) => b.ownerId === user.id)
-        : [];
+      const allBooks = community?.id ? await listBooks({ communityId: community.id }) : [];
+      // Same logic as OwnedBooks.jsx — books you physically hold right now
+      const owned = allBooks.filter(
+        (b) =>
+          (b.ownerId === user.id && b.status !== "unavailable") ||
+          (b.borrowerId === user.id && b.status === "unavailable")
+      );
 
       setActiveBorrowing(readingList[0] || null);
 

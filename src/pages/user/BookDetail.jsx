@@ -235,26 +235,43 @@ export default function BookDetail() {
         )}
       </section>
 
+      {/* Owner — who added the book, never changes */}
+      {owner && owner.id !== user?.id && (
+        <section className="px-4 mt-5">
+          <h3 className="section-title mb-2">Иесі</h3>
+          <Link to={`/users/${owner.id}`} className="card flex items-center gap-3 px-3 py-3">
+            <Avatar src={owner.photoURL} name={`${owner.firstName} ${owner.lastName}`} />
+            <div className="flex-1">
+              <p className="font-medium">{owner.firstName} {owner.lastName}</p>
+              <p className="text-[13px] text-ink-500">@{owner.nickname}</p>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-ink-300">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </Link>
+        </section>
+      )}
+
+      {/* Holder — who physically has the book right now */}
       {(() => {
-        // Show the person the reader would physically get the book from:
-        // - unavailable → current holder (borrower)
-        // - available   → owner
-        // unavailable → current holder
-        // available   → last holder if exists, otherwise owner (never been borrowed yet)
-        const person = currentHolder ?? (book.status === "available" ? owner : null);
-        const label  = book.status === "unavailable"
-          ? "Ұстаушы"
-          : currentHolder ? "Соңғы ұстаушы" : "Ұстаушы";
-        if (!person || person.id === user?.id) return null;
+        // available → owner is the holder (book not lent out)
+        // unavailable → currentHolder (active borrower)
+        const holder = book.status === "unavailable" ? currentHolder : owner;
+        if (!holder || holder.id === user?.id) return null;
+        // Don't repeat if holder === owner and we already showed owner above
+        if (book.status === "available" && owner && holder.id === owner.id) return null;
         return (
           <section className="px-4 mt-5">
-            <h3 className="section-title mb-2">{label}</h3>
-            <Link to={`/users/${person.id}`} className="card flex items-center gap-3 px-3 py-3">
-              <Avatar src={person.photoURL} name={`${person.firstName} ${person.lastName}`} />
+            <h3 className="section-title mb-2">Ұстаушы</h3>
+            <Link to={`/users/${holder.id}`} className="card flex items-center gap-3 px-3 py-3">
+              <Avatar src={holder.photoURL} name={`${holder.firstName} ${holder.lastName}`} />
               <div className="flex-1">
-                <p className="font-medium">{person.firstName} {person.lastName}</p>
-                <p className="text-[13px] text-ink-500">@{person.nickname}</p>
+                <p className="font-medium">{holder.firstName} {holder.lastName}</p>
+                <p className="text-[13px] text-ink-500">@{holder.nickname}</p>
               </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-ink-300">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
             </Link>
           </section>
         );
