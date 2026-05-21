@@ -1,5 +1,5 @@
 export default function SearchBar({
-  value, onChange, placeholder = "Search...", showFilter = true, onFilterClick, onBack,
+  value, onChange, placeholder = "Search...", showFilter = true, onFilterClick, onBack, filterActive = false,
 }) {
   return (
     <div className="flex items-center gap-2 px-4">
@@ -23,10 +23,13 @@ export default function SearchBar({
         />
       </div>
       {showFilter ? (
-        <button aria-label="Filter" onClick={onFilterClick} className="icon-btn shrink-0">
+        <button aria-label="Filter" onClick={onFilterClick} className="icon-btn shrink-0 relative">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
+          {filterActive ? (
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-500 ring-2 ring-base" />
+          ) : null}
         </button>
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext.jsx";
+import { useLang } from "./contexts/LanguageContext.jsx";
 
 import Register from "./pages/auth/Register.jsx";
 import Login from "./pages/auth/Login.jsx";
@@ -11,13 +12,19 @@ import PickupBook from "./pages/user/PickupBook.jsx";
 import Notification from "./pages/user/Notification.jsx";
 import NotificationDetail from "./pages/user/NotificationDetail.jsx";
 import Profile from "./pages/user/Profile.jsx";
+import OwnedBooks from "./pages/user/OwnedBooks.jsx";
+import ReadingNow from "./pages/user/ReadingNow.jsx";
+import CompletedBooks from "./pages/user/CompletedBooks.jsx";
+import SavedBooks from "./pages/user/SavedBooks.jsx";
 import Settings from "./pages/user/Settings.jsx";
 
 import AdminHome from "./pages/admin/AdminHome.jsx";
 import AdminBooks from "./pages/admin/AdminBooks.jsx";
 import AddBook from "./pages/admin/AddBook.jsx";
+import EditBook from "./pages/admin/EditBook.jsx";
 import AdminNotification from "./pages/admin/AdminNotification.jsx";
 import AdminProfile from "./pages/admin/AdminProfile.jsx";
+import AdminMembers from "./pages/admin/AdminMembers.jsx";
 
 import CreateCommunity from "./pages/community/CreateCommunity.jsx";
 import JoinCommunity from "./pages/community/JoinCommunity.jsx";
@@ -27,11 +34,12 @@ import UserProfile from "./pages/community/UserProfile.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 
 function RoleRoute({ userElement, adminElement }) {
-  const { user } = useAuth();
-  return user?.role === "admin" ? adminElement : userElement;
+  const { viewRole } = useAuth();
+  return viewRole === "admin" ? adminElement : userElement;
 }
 
 export default function App() {
+  useLang(); // re-render entire tree whenever language changes so all t.key proxies update
   return (
     <Routes>
       <Route path="/auth/register" element={<Register />} />
@@ -46,12 +54,18 @@ export default function App() {
         <Route path="/books/:id/pickup" element={<PickupBook />} />
 
         <Route path="/books/add" element={<AddBook />} />
+        <Route path="/books/:id/edit" element={<EditBook />} />
 
         <Route path="/notifications" element={<RoleRoute userElement={<Notification />} adminElement={<AdminNotification />} />} />
         {/* Notification detail — shared between user and admin */}
         <Route path="/notifications/:id" element={<NotificationDetail />} />
 
+        <Route path="/admin/members" element={<AdminMembers />} />
         <Route path="/profile" element={<RoleRoute userElement={<Profile />} adminElement={<AdminProfile />} />} />
+        <Route path="/profile/owned"     element={<OwnedBooks />} />
+        <Route path="/profile/reading"   element={<ReadingNow />} />
+        <Route path="/profile/completed" element={<CompletedBooks />} />
+        <Route path="/profile/saved"     element={<SavedBooks />} />
         <Route path="/settings" element={<Settings />} />
 
         <Route path="/community/create" element={<CreateCommunity />} />

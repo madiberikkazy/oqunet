@@ -4,16 +4,22 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./contexts/AuthContext.jsx";
 import { CommunityProvider } from "./contexts/CommunityContext.jsx";
+import { ThemeProvider } from "./contexts/ThemeContext.jsx";
+import { LanguageProvider } from "./contexts/LanguageContext.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <CommunityProvider>
-          <App />
-        </CommunityProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <LanguageProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <CommunityProvider>
+              <App />
+            </CommunityProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </LanguageProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import Stepper from "../../components/Stepper.jsx";
@@ -14,11 +14,28 @@ export default function CreateCommunity() {
   const { setCommunity } = useCommunity();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    nickname: "", name: "", notificationsEnabled: true, photoURL: "",
+    nickname: "", name: "", notificationsEnabled: true,
   });
   const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(""); // human-readable progress label
+  const photoInputRef = useRef(null);
+
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    // reset so same file can be re-selected after removal
+    e.target.value = "";
+  }
+
+  function removePhoto() {
+    setPhotoFile(null);
+    if (photoPreview) { URL.revokeObjectURL(photoPreview); setPhotoPreview(null); }
+  }
 
   function next() {
     setError("");
@@ -34,11 +51,15 @@ export default function CreateCommunity() {
 
   async function submit() {
     setSubmitting(true);
+    setError("");
     try {
-      let photoURL = form.photoURL;
-      if (photoFile) photoURL = await uploadImage(photoFile, `communities/${form.nickname}`);
+      let photoURL = "";
+      if (photoFile) {
+        setSubmitStatus("Загрузка фото…");
+        photoURL = await uploadImage(photoFile, `communities/${form.nickname}`);
+      }
 
-      // Create the new community
+      setSubmitStatus("Создание сообщества…");
       const c = await createCommunity({
         ...form,
         photoURL,
@@ -47,12 +68,8 @@ export default function CreateCommunity() {
         createdAt: Date.now(),
       });
 
-      // Update user: set new communityId and promote to admin.
-      // If they were a member of another community before, communityId is replaced.
-      await updateUser(user.id, {
-        communityId: c.id,
-        role: "admin",
-      });
+      setSubmitStatus("Сохранение…");
+      await updateUser(user.id, { communityId: c.id, role: "admin" });
 
       setCommunity(c);
       await refresh();
@@ -61,6 +78,7 @@ export default function CreateCommunity() {
       setError(err?.message || "Ошибка создания");
     } finally {
       setSubmitting(false);
+      setSubmitStatus("");
     }
   }
 
@@ -128,31 +146,58 @@ export default function CreateCommunity() {
         {step === 3 ? (
           <>
             <h2 className="text-xl font-bold mb-2">Шаг 3 — {t.communityPhoto}</h2>
-            <label className="block bg-brand-50 rounded-2xl h-40 flex items-center justify-center cursor-pointer overflow-hidden">
-              {photoFile ? (
-                <img src={URL.createObjectURL(photoFile)} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-brand-500 flex flex-col items-center">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="12" r="11" opacity="0.15" />
-                    <path d="M12 7v10M7 12h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                  <span className="text-[13px] mt-2">{t.addPhoto}</span>
-                </span>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-              />
-            </label>
+
+            {/* Hidden file input — triggered by button click via ref */}
             <input
-              value={form.photoURL}
-              onChange={(e) => setForm({ ...form, photoURL: e.target.value })}
-              placeholder={t.orPasteUrl}
-              className="input"
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
             />
+
+            {photoPreview ? (
+              /* ── Preview + actions ── */
+              <div className="relative rounded-2xl overflow-hidden h-48 bg-ink-100">
+                <img
+                  src={photoPreview}
+                  alt="Превью аватара"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-3 right-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-xl bg-surface/90 text-[13px] font-medium text-ink-700 shadow"
+                  >
+                    Изменить
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    className="px-3 py-1.5 rounded-xl bg-bad/90 text-[13px] font-medium text-white shadow"
+                  >
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* ── Upload area ── */
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="w-full h-48 rounded-2xl bg-brand-50 border-2 border-dashed border-brand-200
+                           flex flex-col items-center justify-center gap-3
+                           text-brand-500 hover:bg-brand-100 transition active:scale-[0.99] cursor-pointer"
+              >
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="11" fill="currentColor" opacity="0.12" />
+                  <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <span className="text-[14px] font-medium">Выбрать фото</span>
+                <span className="text-[12px] text-brand-400">JPG, PNG, WEBP</span>
+              </button>
+            )}
           </>
         ) : null}
 
@@ -161,7 +206,7 @@ export default function CreateCommunity() {
 
       <div className="absolute bottom-4 left-0 right-0 px-5">
         <button onClick={next} disabled={submitting} className="btn-primary">
-          {submitting ? "..." : step === 3 ? "Создать" : t.next}
+          {submitting ? (submitStatus || "…") : step === 3 ? "Создать" : t.next}
         </button>
       </div>
     </MobileShell>

@@ -2,32 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════
+   COLOUR TOKENS  — light mode defaults
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  /* Brand — #2853AF */
+  --brand-50:  #EDF1FB;
+  --brand-100: #D5E0F5;
+  --brand-200: #A8BDE6;
+  --brand-500: #2853AF;
+  --brand-600: #1E3E87;
+  --brand-700: #152D62;
+
+  /* Ink (neutral grays) */
+  --ink-900: #0F1724;
+  --ink-700: #2A3340;
+  --ink-500: #5B6573;
+  --ink-300: #A7ADB7;
+  --ink-100: #EEF0F3;
+
+  /* Surfaces */
+  --bg-base:    #ffffff;
+  --bg-surface: #ffffff;
+
+  /* Status */
+  --ok:       #16A34A;
+  --okSoft:   #DCFCE7;
+  --warn:     #F59E0B;
+  --warnSoft: #FEF3C7;
+  --bad:      #EF4444;
+  --badSoft:  #FEE2E2;
+
+  /* Profile stat cards */
+  --stat-purple: #F4ECFA;
+  --stat-green:  #E5F7F0;
+  --stat-red:    #FDECEC;
+  --stat-pink:   #FDE9F0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES  — applied when <html class="dark">
+   ═══════════════════════════════════════════════════════════════════ */
+.dark {
+  --ink-900: #F0F4FF;
+  --ink-700: #C5CEDF;
+  --ink-500: #8A97A8;
+  --ink-300: #4A5668;
+  --ink-100: #1E2A3B;
+
+  --bg-base:    #0D1420;
+  --bg-surface: #162032;
+
+  --okSoft:   #0D3321;
+  --warnSoft: #3D2E0A;
+  --badSoft:  #3D0F0F;
+
+  /* Profile stat cards — dark versions */
+  --stat-purple: #2A1D35;
+  --stat-green:  #1A2E25;
+  --stat-red:    #2E1A1A;
+  --stat-pink:   #2E1A22;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
 @layer base {
-  html, body, #root { height: 100%; }
+  html, body, #root {
+    height: 100%;
+    min-height: 100%;
+  }
   body {
-    @apply font-sans text-ink-900 antialiased;
-    background: #e9eef3;
+    @apply font-sans antialiased;
+    color:      var(--ink-900);
+    background: var(--bg-base);
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   REUSABLE COMPONENT CLASSES
+   ═══════════════════════════════════════════════════════════════════ */
 @layer components {
-  .card { @apply bg-white rounded-2xl shadow-soft; }
-  .input { @apply w-full bg-ink-100 rounded-xl px-4 py-3 text-[15px] placeholder-ink-300 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:bg-white transition; }
-  .btn-primary { @apply w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl py-3.5 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed; }
-  .btn-secondary { @apply w-full bg-ink-100 hover:bg-ink-100/80 text-ink-900 font-semibold rounded-xl py-3.5 transition; }
-  .pill { @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium; }
-  .icon-btn { @apply w-10 h-10 inline-flex items-center justify-center rounded-xl bg-ink-100 text-ink-700 hover:bg-ink-100/80 transition; }
-  .section-title { @apply text-[15px] font-semibold text-ink-900; }
+  .card {
+    background: var(--bg-surface);
+    @apply rounded-2xl;
+    box-shadow: 0 4px 16px rgba(15, 23, 36, 0.06);
+  }
+  /* In dark mode replace drop-shadow with a subtle border */
+  .dark .card {
+    box-shadow: none;
+    border: 1px solid var(--ink-100);
+  }
+
+  .input {
+    @apply w-full rounded-xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-brand-200 transition;
+    background: var(--ink-100);
+    color:      var(--ink-900);
+  }
+  .input::placeholder { color: var(--ink-300); }
+  .input:focus        { background: var(--bg-surface); }
+
+  .btn-primary {
+    @apply w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl py-3.5 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply w-full font-semibold rounded-xl py-3.5 transition;
+    background: var(--ink-100);
+    color:      var(--ink-900);
+  }
+
+  .pill {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .icon-btn {
+    @apply w-10 h-10 inline-flex items-center justify-center rounded-xl transition;
+    background: var(--ink-100);
+    color:      var(--ink-700);
+  }
+
+  .section-title {
+    @apply text-[15px] font-semibold;
+    color: var(--ink-900);
+  }
 }
 
-.mobile-shell {
-  max-width: 420px;
-  margin: 0 auto;
-  background: #ffffff;
-  min-height: 100vh;
-  position: relative;
-  box-shadow: 0 8px 40px rgba(15, 23, 36, 0.08);
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE TRANSITION
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes pageSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-transition {
+  animation: pageSlideIn 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   SCROLLBAR HIDING
+   ═══════════════════════════════════════════════════════════════════ */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

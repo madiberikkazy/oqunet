@@ -1,31 +1,40 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
+        // All colours are CSS-variable-driven so dark mode just flips the vars.
         brand: {
-          DEFAULT: "#2D6BFF",
-          50: "#EEF3FF",
-          100: "#DDE7FF",
-          200: "#B8CCFF",
-          500: "#2D6BFF",
-          600: "#1F58E0",
-          700: "#1947B8",
+          DEFAULT: "var(--brand-500)",
+          50:  "var(--brand-50)",
+          100: "var(--brand-100)",
+          200: "var(--brand-200)",
+          500: "var(--brand-500)",
+          600: "var(--brand-600)",
+          700: "var(--brand-700)",
         },
         ink: {
-          900: "#0F1724",
-          700: "#2A3340",
-          500: "#5B6573",
-          300: "#A7ADB7",
-          100: "#EEF0F3",
+          900: "var(--ink-900)",
+          700: "var(--ink-700)",
+          500: "var(--ink-500)",
+          300: "var(--ink-300)",
+          100: "var(--ink-100)",
         },
-        ok: "#16A34A",
-        okSoft: "#DCFCE7",
-        warn: "#F59E0B",
-        warnSoft: "#FEF3C7",
-        bad: "#EF4444",
-        badSoft: "#FEE2E2",
+        // Named surface tokens — used in MobileShell, BottomNav, cards
+        base:    "var(--bg-base)",
+        surface: "var(--bg-surface)",
+        ok:      "var(--ok)",
+        okSoft:  "var(--okSoft)",
+        warn:    "var(--warn)",
+        warnSoft:"var(--warnSoft)",
+        bad:     "var(--bad)",
+        badSoft: "var(--badSoft)",
+        statPurple: "var(--stat-purple)",
+        statGreen:  "var(--stat-green)",
+        statRed:    "var(--stat-red)",
+        statPink:   "var(--stat-pink)",
       },
       fontFamily: {
         sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],

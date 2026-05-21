@@ -108,7 +108,7 @@ export default function Notification() {
               title={t.noNotifications}
               subtitle={t.noNotificationsHint}
               icon={
-                <svg width="120" height="120" viewBox="0 0 24 24" fill="#2D6BFF">
+                <svg width="120" height="120" viewBox="0 0 24 24" className="text-brand-500" fill="currentColor">
                   <path d="M12 3a6 6 0 0 0-6 6v3.5L4.5 15a.75.75 0 0 0 .53 1.28h13.94A.75.75 0 0 0 19.5 15L18 12.5V9a6 6 0 0 0-6-6Zm0 18a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 21Z" />
                 </svg>
               }
