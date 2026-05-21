@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import {
@@ -6,6 +6,9 @@ import {
   getUserById,
   getActiveBorrowingByBook,
   getActiveBorrowingForUser,
+  getPickupRequest,
+  cancelPickupRequest,
+  fulfillPickupRequest,
   createBorrowing,
   updateBorrowing,
   updateBook,
@@ -13,11 +16,9 @@ import {
 } from "../../firebase/firestore.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 
-// Generate a random 4-digit string like "4823"
 function makeCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
-
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -30,70 +31,96 @@ export default function PickupBook() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [book, setBook] = useState(null);
-  const [currentHolder, setCurrentHolder] = useState(null);   // user who currently holds the book
-  const [existingBorrowing, setExistingBorrowing] = useState(null); // active borrowing doc
-  const [returnDate, setReturnDate] = useState("");
-  const [digits, setDigits] = useState(["", "", "", ""]);
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
-  // Whether a pickup-request notification has already been sent this session
-  const notifSentRef = useRef(false);
+  const [book, setBook]                   = useState(null);
+  const [currentHolder, setCurrentHolder] = useState(null);
+  const [existingBorrowing, setExistingBorrowing] = useState(null);
+  const [pickupRequest, setPickupRequest] = useState(null);
+  // loanDays tracks how many days the user wants — always computed from NOW at submit
+  const [loanDays, setLoanDays]           = useState(7);
+  const [returnDate, setReturnDate]       = useState("");
+  const [digits, setDigits]               = useState(["", "", "", ""]);
+  const [error, setError]                 = useState("");
+  const [submitting, setSubmitting]       = useState(false);
+  const [cancelling, setCancelling]       = useState(false);
+  const [loading, setLoading]             = useState(true);
+  const [resending, setResending]         = useState(false);
+  const [resent, setResent]               = useState(false);
+  const [success, setSuccess]             = useState(false);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       const b = await getBook(id);
       setBook(b);
-
-      const maxDays = b?.maxDays || 14;
-      setReturnDate(fmt(addDays(Date.now(), Math.min(7, maxDays))));
+      const defaultDays = Math.min(7, b?.maxDays || 14);
+      setLoanDays(defaultDays);
+      setReturnDate(fmt(addDays(Date.now(), defaultDays)));
 
       if (b?.status === "unavailable") {
-        // Find who currently holds it
         const borrowing = await getActiveBorrowingByBook(id);
         setExistingBorrowing(borrowing);
         if (borrowing?.borrowerId) {
-          const holder = await getUserById(borrowing.borrowerId);
-          setCurrentHolder(holder);
+          setCurrentHolder(await getUserById(borrowing.borrowerId));
         }
       }
+
+      if (user?.id) {
+        const req = await getPickupRequest(id, user.id);
+        setPickupRequest(req);
+      }
+
       setLoading(false);
     })();
-  }, [id]);
+  }, [id, user?.id]);
 
-  // Send a one-time notification to the current holder with the code
-  useEffect(() => {
-    if (!existingBorrowing || !currentHolder || notifSentRef.current) return;
-    if (!user) return;
-    notifSentRef.current = true;
+  async function handleCancel() {
+    setCancelling(true);
+    try {
+      if (pickupRequest?.id) await cancelPickupRequest(pickupRequest.id);
+    } catch (e) { console.error(e); }
+    finally {
+      setCancelling(false);
+      navigate(`/books/${id}`, { replace: true });
+    }
+  }
 
-    // Only notify if the requester is different from the current holder
-    if (currentHolder.id === user.id) return;
+  async function handleResend() {
+    setResending(true);
+    setResent(false);
+    try {
+      if (existingBorrowing?.pickupCode) {
+        await createNotification({
+          recipientId: existingBorrowing.borrowerId,
+          title: "Напоминание: код для передачи книги",
+          body: `${user.firstName} ${user.lastName} ждёт код для получения книги «${book.name}». Назовите ему ваш 4-значный код:`,
+          read: false,
+          type: "pickup-request",
+          bookId: id,
+          pickupCode: existingBorrowing.pickupCode,
+        });
+      } else if (pickupRequest?.pickupCode) {
+        await createNotification({
+          recipientId: book.ownerId,
+          title: "Напоминание: код для передачи книги",
+          body: `${user.firstName} ${user.lastName} ждёт код для получения книги «${book.name}». Назовите ему ваш 4-значный код:`,
+          read: false,
+          type: "borrow-request",
+          bookId: id,
+          pickupCode: pickupRequest.pickupCode,
+        });
+      }
+      setResent(true);
+    } catch (err) { console.error(err); }
+    finally { setResending(false); }
+  }
 
-    createNotification({
-      recipientId: currentHolder.id,
-      title: "Запрос на передачу книги",
-      body: `${user.firstName} ${user.lastName} хочет получить книгу «${existingBorrowing.bookName || book?.name}», которую вы держите. Если вы передадите книгу — сообщите ему код: ${existingBorrowing.pickupCode}`,
-      read: false,
-      type: "pickup-request",
-      bookId: id,
-      pickupCode: existingBorrowing.pickupCode,
-    });
-  }, [existingBorrowing, currentHolder, user]);
-
-  // Handle digit input — auto-advance to next box
   function handleDigit(index, value) {
     const cleaned = value.replace(/\D/g, "").slice(-1);
     const next = [...digits];
     next[index] = cleaned;
     setDigits(next);
-    if (cleaned && index < 3) {
-      document.getElementById(`digit-${index + 1}`)?.focus();
-    }
+    if (cleaned && index < 3) document.getElementById(`digit-${index + 1}`)?.focus();
   }
-
   function handleKeyDown(index, e) {
     if (e.key === "Backspace" && !digits[index] && index > 0) {
       document.getElementById(`digit-${index - 1}`)?.focus();
@@ -103,35 +130,24 @@ export default function PickupBook() {
   async function onSubmit(e) {
     e.preventDefault();
     setError("");
-
     const enteredCode = digits.join("");
-    if (enteredCode.length < 4) {
-      setError("Введите 4-значный код");
-      return;
-    }
+    if (enteredCode.length < 4) { setError("Введите 4-значный код"); return; }
 
-    // Case 1: book is unavailable — verify code against existing borrowing
     if (existingBorrowing) {
+      // Case 1: book held by someone
       if (enteredCode !== existingBorrowing.pickupCode) {
-        setError("Неверный код. Попросите текущего читателя сообщить вам код.");
+        setError("Неверный код. Попросите текущего читателя назвать вам код или отправьте напоминание.");
         return;
       }
-
       setSubmitting(true);
       try {
         const active = await getActiveBorrowingForUser(user.id);
-        if (active) {
-          setError("Сначала верните взятую вами книгу.");
-          return;
-        }
+        if (active && active.bookId !== id) { setError("Сначала верните взятую вами книгу."); return; }
 
-        // Generate a fresh code for the next handover
         const newCode = makeCode();
-
-        // Close the previous borrowing
+        // returnDate is computed from NOW (actual handoff day), not from when page loaded
+        const actualReturnTs = addDays(Date.now(), loanDays).getTime();
         await updateBorrowing(existingBorrowing.id, { status: "completed" });
-
-        // Create a new borrowing for this user
         await createBorrowing({
           bookId: id,
           bookName: book.name,
@@ -139,55 +155,46 @@ export default function PickupBook() {
           ownerId: book.ownerId,
           communityId: book.communityId,
           startDate: Date.now(),
-          returnDate: new Date(returnDate).getTime(),
+          returnDate: actualReturnTs,
           status: "active",
           pickupCode: newCode,
         });
-
         await updateBook(id, { status: "unavailable", borrowerId: user.id });
-
-        // Notify book owner
         await createNotification({
           recipientId: book.ownerId,
           title: "Книга передана новому читателю",
-          body: `«${book.name}» теперь у ${user.firstName} ${user.lastName} (@${user.nickname}).`,
+          body: `«${book.name}» теперь у ${user.firstName} ${user.lastName} (@${user.nickname}). Новый код для следующей передачи:`,
           read: false,
           type: "book-transferred",
           bookId: id,
+          pickupCode: newCode,
         });
-
-        navigate(`/books/${id}`, { replace: true });
+        if (pickupRequest?.id) await fulfillPickupRequest(pickupRequest.id);
+        setSuccess(true);
       } catch (err) {
         setError(err?.message || "Ошибка");
-      } finally {
-        setSubmitting(false);
-      }
+      } finally { setSubmitting(false); }
       return;
     }
 
-    // Case 2: book is available (owner is handing it out for the first time)
-    // No code needed — but we still need a return date check.
-    // Generate first pickup code.
+    // Case 2: free book
+    const expectedCode = pickupRequest?.pickupCode;
+    if (!expectedCode || enteredCode !== expectedCode) {
+      setError("Неверный код. Проверьте код у владельца книги или отправьте напоминание.");
+      return;
+    }
     setSubmitting(true);
     try {
       const active = await getActiveBorrowingForUser(user.id);
-      if (active) {
-        setError("Сначала верните взятую вами книгу.");
-        return;
-      }
-      if (book.ownerId === user.id) {
-        setError("Это ваша книга.");
-        return;
-      }
-
-      const maxDate = addDays(Date.now(), book.maxDays || 14);
-      if (new Date(returnDate) > maxDate) {
+      if (active && active.bookId !== id) { setError("Сначала верните взятую вами книгу."); return; }
+      if (loanDays > (book.maxDays || 14)) {
         setError(`Максимальный срок — ${book.maxDays || 14} дней.`);
         return;
       }
 
+      // returnDate computed from NOW (actual handoff day)
+      const actualReturnTs = addDays(Date.now(), loanDays).getTime();
       const newCode = makeCode();
-
       await createBorrowing({
         bookId: id,
         bookName: book.name,
@@ -195,28 +202,25 @@ export default function PickupBook() {
         ownerId: book.ownerId,
         communityId: book.communityId,
         startDate: Date.now(),
-        returnDate: new Date(returnDate).getTime(),
+        returnDate: actualReturnTs,
         status: "active",
         pickupCode: newCode,
       });
-
       await updateBook(id, { status: "unavailable", borrowerId: user.id });
-
       await createNotification({
         recipientId: book.ownerId,
-        title: "Запрос на книгу",
-        body: `${user.firstName} ${user.lastName} берёт вашу книгу «${book.name}» до ${returnDate}.`,
+        title: "Книга передана",
+        body: `${user.firstName} ${user.lastName} получил вашу книгу «${book.name}». Новый код для следующей передачи:`,
         read: false,
-        type: "borrow-request",
+        type: "book-transferred",
         bookId: id,
+        pickupCode: newCode,
       });
-
-      navigate(`/books/${id}`, { replace: true });
+      if (pickupRequest?.id) await fulfillPickupRequest(pickupRequest.id);
+      setSuccess(true);
     } catch (err) {
       setError(err?.message || "Ошибка");
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   }
 
   if (loading || !book) {
@@ -227,13 +231,52 @@ export default function PickupBook() {
     );
   }
 
+  // ── Success screen ───────────────────────────────────────────────────────
+  if (success) {
+    return (
+      <MobileShell withNav={false}>
+        <div className="flex flex-col items-center px-6 pt-20 pb-10 gap-7 text-center">
+          {/* Big checkmark circle */}
+          <div className="w-28 h-28 rounded-full bg-okSoft flex items-center justify-center">
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+              <path d="M5 13l4 4L19 7" stroke="#22c55e" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          <div className="space-y-3">
+            <h1 className="text-3xl font-bold">Керемет!</h1>
+            <p className="text-[16px] text-ink-700 leading-relaxed">
+              Кітап{" "}
+              <span className="font-semibold">«{book.name}»</span>{" "}
+              енді{" "}
+              <span className="font-semibold">«Қазір оқып жатқан кітап»</span>{" "}
+              бөліміне қосылды.
+            </p>
+          </div>
+
+          <button
+            onClick={() => navigate(`/books/${id}`, { replace: true })}
+            className="btn-primary"
+          >
+            Кітапқа өту →
+          </button>
+        </div>
+      </MobileShell>
+    );
+  }
+
   const isUnavailable = book.status === "unavailable";
+  const needsCode = isUnavailable || Boolean(pickupRequest?.pickupCode);
+  const holderLabel = isUnavailable
+    ? (currentHolder ? `@${currentHolder.nickname}` : "текущего читателя")
+    : "владельца книги";
 
   return (
     <MobileShell withNav={false}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 pt-2">
-        <button onClick={() => navigate(-1)} className="icon-btn">
+        <button onClick={() => navigate(`/books/${id}`, { replace: true })} className="icon-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
@@ -242,7 +285,7 @@ export default function PickupBook() {
       </div>
 
       <div className="px-5 pt-5 space-y-5">
-        {/* Book info */}
+        {/* Book card */}
         <div className="card p-4 flex gap-3">
           {book.coverUrl ? (
             <img src={book.coverUrl} alt={book.name}
@@ -254,18 +297,25 @@ export default function PickupBook() {
           </div>
         </div>
 
-        {isUnavailable ? (
-          /* Book is currently with someone — user must enter the code */
+        {needsCode ? (
           <>
-            <div className="rounded-2xl bg-warnSoft px-4 py-3 text-[13px] text-warn leading-relaxed">
-              Эта книга сейчас у другого читателя
-              {currentHolder ? ` (@${currentHolder.nickname})` : ""}.
-              Когда вы физически получите книгу, попросите его назвать вам 4-значный код.
+            <div className="rounded-2xl bg-brand-50 border border-brand-200 px-4 py-4">
+              <p className="text-[14px] font-semibold text-brand-900 mb-1">
+                Когда получите книгу — введите код
+              </p>
+              <p className="text-[13px] text-brand-700 leading-relaxed">
+                {isUnavailable
+                  ? <>Попросите текущего читателя{currentHolder ? ` (@${currentHolder.nickname})` : ""} назвать вам 4-значный код.</>
+                  : <>Попросите владельца книги назвать вам 4-значный код.</>}
+              </p>
             </div>
 
             <form onSubmit={onSubmit} className="space-y-5">
+              {/* Code boxes */}
               <div>
-                <p className="section-title mb-3">Введите код от текущего читателя</p>
+                <p className="section-title mb-3 text-center">
+                  {isUnavailable ? "Код от текущего читателя" : "Код от владельца книги"}
+                </p>
                 <div className="flex gap-3 justify-center">
                   {digits.map((d, i) => (
                     <input
@@ -277,12 +327,29 @@ export default function PickupBook() {
                       value={d}
                       onChange={(e) => handleDigit(i, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(i, e)}
-                      className="w-14 h-16 text-center text-2xl font-bold rounded-2xl bg-ink-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition"
+                      className="w-14 h-16 text-center text-2xl font-bold rounded-2xl bg-ink-100 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-surface transition"
                     />
                   ))}
                 </div>
+                <div className="mt-4 flex flex-col items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={resending}
+                    className="text-[13px] text-brand-500 font-medium hover:underline underline-offset-2 disabled:opacity-50 transition"
+                  >
+                    {resending ? "Отправляем..." : "Отправить код повторно"}
+                  </button>
+                  {resent ? (
+                    <p className="text-[12px] text-ok text-center">
+                      ✓ Код повторно отправлен {holderLabel}.
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
+              {/* Return date — loanDays is recalculated from NOW, so the
+                  actual return date is always relative to the real handoff date */}
               <div>
                 <p className="section-title mb-1">Дата возврата</p>
                 <input
@@ -290,7 +357,13 @@ export default function PickupBook() {
                   value={returnDate}
                   min={fmt(Date.now())}
                   max={fmt(addDays(Date.now(), book.maxDays || 14))}
-                  onChange={(e) => setReturnDate(e.target.value)}
+                  onChange={(e) => {
+                    setReturnDate(e.target.value);
+                    const days = Math.round(
+                      (new Date(e.target.value).getTime() - Date.now()) / 86400000
+                    );
+                    setLoanDays(Math.max(1, Math.min(days, book.maxDays || 14)));
+                  }}
                   className="input"
                 />
                 <p className="text-[12px] text-ink-500 mt-1">
@@ -301,52 +374,20 @@ export default function PickupBook() {
               {error ? <p className="text-bad text-[13px]">{error}</p> : null}
 
               <button disabled={submitting} className="btn-primary">
-                {submitting ? "..." : "Подтвердить получение"}
+                {submitting ? "…" : "Подтвердить получение"}
               </button>
-              <button
-                type="button"
-                onClick={() => navigate(-1)}
-                className="btn-secondary"
-              >
-                Отмена
+              <button type="button" onClick={handleCancel} disabled={cancelling} className="btn-secondary">
+                {cancelling ? "…" : "Отмена"}
               </button>
             </form>
           </>
         ) : (
-          /* Book is available — no code needed, just pick a return date */
-          <form onSubmit={onSubmit} className="space-y-5">
-            <div className="rounded-2xl bg-okSoft px-4 py-3 text-[13px] text-ok">
-              Книга свободна. Выберите дату возврата и подтвердите получение.
-            </div>
-
-            <div>
-              <p className="section-title mb-1">Дата возврата</p>
-              <input
-                type="date"
-                value={returnDate}
-                min={fmt(Date.now())}
-                max={fmt(addDays(Date.now(), book.maxDays || 14))}
-                onChange={(e) => setReturnDate(e.target.value)}
-                className="input"
-              />
-              <p className="text-[12px] text-ink-500 mt-1">
-                Максимум {book.maxDays || 14} дней
-              </p>
-            </div>
-
-            {error ? <p className="text-bad text-[13px]">{error}</p> : null}
-
-            <button disabled={submitting} className="btn-primary">
-              {submitting ? "..." : "Подтвердить получение"}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              className="btn-secondary"
-            >
-              Отмена
-            </button>
-          </form>
+          <div className="rounded-2xl bg-ink-100 px-4 py-5 text-center space-y-3">
+            <p className="text-[14px] text-ink-700">
+              Запрос на книгу не найден. Вернитесь назад и нажмите «Получить книгу» снова.
+            </p>
+            <button onClick={handleCancel} className="btn-secondary">Назад</button>
+          </div>
         )}
       </div>
     </MobileShell>

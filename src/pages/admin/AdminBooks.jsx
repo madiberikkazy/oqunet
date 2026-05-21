@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
 import Fab from "../../components/Fab.jsx";
@@ -12,9 +12,20 @@ const FALLBACK =
 
 export default function AdminBooks() {
   const { community } = useCommunity();
+  const navigate = useNavigate();
   const [books, setBooks] = useState([]);
   const [search, setSearch] = useState("");
   const [menuFor, setMenuFor] = useState(null);
+  const menuRef = useRef(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function onOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuFor(null);
+    }
+    if (menuFor) document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [menuFor]);
 
   async function load() {
     if (!community?.id) return;
@@ -47,16 +58,30 @@ export default function AdminBooks() {
                 <h4 className="font-semibold text-[15px] truncate">{b.name}</h4>
                 <p className="text-[13px] text-ink-500 truncate">{b.author}</p>
               </Link>
-              <div className="relative">
+              <div className="relative" ref={menuFor === b.id ? menuRef : null}>
                 <button onClick={() => setMenuFor(menuFor === b.id ? null : b.id)} className="icon-btn" aria-label="More">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
                   </svg>
                 </button>
                 {menuFor === b.id ? (
-                  <div className="absolute right-0 top-12 bg-white shadow-soft rounded-xl py-1 z-10 w-36">
-                    <Link to={`/books/${b.id}`} className="block px-3 py-2 text-[14px] hover:bg-ink-100" onClick={() => setMenuFor(null)}>Открыть</Link>
-                    <button onClick={() => onDelete(b.id)} className="block w-full text-left px-3 py-2 text-[14px] text-bad hover:bg-badSoft">Удалить</button>
+                  <div className="absolute right-0 top-12 bg-surface shadow-soft border border-ink-100 rounded-xl py-1 z-10 w-40">
+                    <Link to={`/books/${b.id}`} className="block px-4 py-2.5 text-[14px] hover:bg-ink-100 transition" onClick={() => setMenuFor(null)}>
+                      Открыть
+                    </Link>
+                    <button
+                      onClick={() => { setMenuFor(null); navigate(`/books/${b.id}/edit`); }}
+                      className="block w-full text-left px-4 py-2.5 text-[14px] hover:bg-ink-100 transition"
+                    >
+                      Редактировать
+                    </button>
+                    <div className="h-px bg-ink-100 my-1" />
+                    <button
+                      onClick={() => onDelete(b.id)}
+                      className="block w-full text-left px-4 py-2.5 text-[14px] text-bad hover:bg-badSoft transition"
+                    >
+                      Удалить
+                    </button>
                   </div>
                 ) : null}
               </div>

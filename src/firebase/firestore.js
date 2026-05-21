@@ -145,7 +145,7 @@ export async function listCommunities() { return getCollection("communities"); }
 
 // ---------- Books ----------
 export async function createBook(payload) { return createOne("books", payload); }
-export async function listBooks({ communityId, search, status, pageSize = 20 } = {}) {
+export async function listBooks({ communityId, search, status, genres, pageSize = 200 } = {}) {
   const wheres = [];
   if (communityId) wheres.push(["communityId", "==", communityId]);
   if (status) wheres.push(["status", "==", status]);
@@ -153,6 +153,10 @@ export async function listBooks({ communityId, search, status, pageSize = 20 } =
   if (search) {
     const s = search.toLowerCase();
     rows = rows.filter((b) => b.name?.toLowerCase().includes(s) || b.author?.toLowerCase().includes(s));
+  }
+  // Genre filtering is client-side (multi-select, no Firestore compound index needed)
+  if (genres && genres.length > 0) {
+    rows = rows.filter((b) => genres.includes(b.genre));
   }
   return rows;
 }
@@ -222,6 +226,33 @@ export async function listJoinRequests(communityId) {
 }
 export async function updateJoinRequest(id, patch) { return updateOne("requests", id, patch); }
 
+// ---------- Pickup requests ----------
+// Stored in the same "requests" collection with type:"pickup".
+// One pending request per user per book at a time.
+
+export async function createPickupRequest(payload) {
+  return createOne("requests", { type: "pickup", status: "pending", ...payload });
+}
+
+/** Return the pending pickup request for a given user + book, or null. */
+export async function getPickupRequest(bookId, requesterId) {
+  // Query by requesterId + type; filter bookId in JS to minimise index requirements.
+  const rows = await getCollection("requests", {
+    where: [["requesterId", "==", requesterId], ["type", "==", "pickup"], ["status", "==", "pending"]],
+  });
+  return rows.find((r) => r.bookId === bookId) || null;
+}
+
+/** Mark a pickup request as cancelled. */
+export async function cancelPickupRequest(id) {
+  return updateOne("requests", id, { status: "cancelled" });
+}
+
+/** Mark a pickup request as fulfilled (book successfully received). */
+export async function fulfillPickupRequest(id) {
+  return updateOne("requests", id, { status: "fulfilled" });
+}
+
 // ---------- Borrowings ----------
 export async function createBorrowing(payload) {
   return createOne("borrowings", { status: "active", ...payload });
@@ -236,6 +267,17 @@ export async function getActiveBorrowingForUser(userId) {
 export async function getActiveBorrowingByBook(bookId) {
   const rows = await getCollection("borrowings", {
     where: [["bookId", "==", bookId], ["status", "==", "active"]],
+  });
+  return rows[0] || null;
+}
+
+// Get the most recent completed borrowing for a book (to show the last holder)
+export async function getLastCompletedBorrowingByBook(bookId) {
+  const rows = await getCollection("borrowings", {
+    where: [["bookId", "==", bookId], ["status", "==", "completed"]],
+    orderByField: "createdAt",
+    descending: true,
+    pageSize: 1,
   });
   return rows[0] || null;
 }

@@ -6,7 +6,7 @@ import SearchBar from "../../components/SearchBar.jsx";
 import { listUsersByCommunity, createBook } from "../../firebase/firestore.js";
 import { uploadImage } from "../../firebase/storage.js";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
-import { t } from "../../utils/i18n.js";
+import { t, GENRES } from "../../utils/i18n.js";
 
 export default function AddBook() {
   const navigate = useNavigate();
@@ -14,7 +14,7 @@ export default function AddBook() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "", author: "", year: "", givenAt: "", maxDays: 14,
-    description: "", ownerId: "", coverUrl: "",
+    description: "", ownerId: "", coverUrl: "", genre: "",
   });
   const [coverFile, setCoverFile] = useState(null);
   const [members, setMembers] = useState([]);
@@ -84,6 +84,7 @@ export default function AddBook() {
 }
 
 function Step1({ form, update }) {
+  const lang = typeof window !== "undefined" ? localStorage.getItem("lang") || "kz" : "kz";
   return (
     <div>
       <h2 className="text-xl font-bold mb-3">{t.basicData}</h2>
@@ -97,6 +98,29 @@ function Step1({ form, update }) {
           </select>
           <input type="number" min="1" max="60" value={form.maxDays} onChange={(e) => update("maxDays", Number(e.target.value))} placeholder={t.maxDays} className="input" />
         </div>
+
+        {/* Genre picker */}
+        <div>
+          <span className="text-[13px] text-ink-500 mb-2 block">{t.genre}</span>
+          <div className="flex flex-wrap gap-2">
+            {GENRES.map((g) => (
+              <button
+                key={g.value}
+                type="button"
+                onClick={() => update("genre", form.genre === g.value ? "" : g.value)}
+                className={
+                  "px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors " +
+                  (form.genre === g.value
+                    ? "bg-brand-500 text-white"
+                    : "bg-ink-100 text-ink-700")
+                }
+              >
+                {g[lang] ?? g.kz}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label className="block">
           <span className="text-[13px] text-ink-500 mb-1 block">{t.description}</span>
           <textarea value={form.description} onChange={(e) => update("description", e.target.value)} placeholder={t.descriptionPlaceholder} rows="4" className="input" />

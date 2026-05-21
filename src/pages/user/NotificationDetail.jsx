@@ -100,11 +100,12 @@ export default function NotificationDetail() {
     : "";
 
   const isJoinApproved = notification.type === "join-approved";
-  const isPending = notification.confirmed === "pending";
+  const isPending  = notification.confirmed === "pending";
   const isAccepted = notification.confirmed === "accepted";
   const isDeclined = notification.confirmed === "declined";
 
-  const isPickupRequest = notification.type === "pickup-request";
+  // Show the code widget for ANY notification that carries a pickupCode field.
+  const hasCode = Boolean(notification.pickupCode);
 
   return (
     <MobileShell withNav={false}>
@@ -130,10 +131,10 @@ export default function NotificationDetail() {
           {notification.body}
         </p>
 
-        {/* ── Pickup-request: show the code prominently ── */}
-        {isPickupRequest && notification.pickupCode ? (
+        {/* ── Code widget — shown for any notification that carries a pickupCode ── */}
+        {hasCode ? (
           <div className="card p-5 flex flex-col items-center gap-3">
-            <p className="text-[13px] text-ink-500">Код для передачи книги</p>
+            <p className="text-[13px] text-ink-500 font-medium">Код передачи книги</p>
             <div className="flex gap-3">
               {String(notification.pickupCode).split("").map((digit, i) => (
                 <div

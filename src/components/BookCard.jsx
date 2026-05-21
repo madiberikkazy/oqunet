@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import BookStatusBadge from "./BookStatusBadge.jsx";
 import SaveButton from "./SaveButton.jsx";
+import { genreLabel } from "../utils/i18n.js";
 
 const FALLBACK_COVER =
   "data:image/svg+xml;utf8," +
@@ -29,8 +30,13 @@ export default function BookCard({ book, onSaveToggle, saved, showRating = true 
           />
         </div>
         <p className="text-[13px] text-ink-500 truncate">{book.author}</p>
-        <div className="mt-1.5 flex items-center gap-2">
+        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
           <BookStatusBadge status={status} daysLeft={book.daysLeft} />
+          {book.genre ? (
+            <span className="px-2 py-0.5 rounded-full bg-ink-100 text-ink-500 text-[11px] font-medium">
+              {genreLabel(book.genre)}
+            </span>
+          ) : null}
         </div>
         {showRating && book.ratingCount > 0 ? (
           <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[13px] text-ink-700">
