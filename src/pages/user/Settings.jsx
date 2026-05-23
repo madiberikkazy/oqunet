@@ -13,7 +13,10 @@ import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { useTheme } from "../../contexts/ThemeContext.jsx";
 import { useLang } from "../../contexts/LanguageContext.jsx";
 import { auth, isFirebaseConfigured } from "../../firebase/config.js";
-import { getActiveBorrowingForUser, getUserByNickname, updateUser } from "../../firebase/firestore.js";
+import {
+  getActiveBorrowingForUser, getUserByNickname, updateUser,
+  createLeaveRequest, getPendingLeaveRequest, createNotification,
+} from "../../firebase/firestore.js";
 import { uploadImage } from "../../firebase/storage.js";
 import { t } from "../../utils/i18n.js";
 
@@ -135,6 +138,65 @@ export default function Settings() {
       navigate("/", { replace: true });
     } else {
       navigate("/community/create");
+    }
+  }
+
+  // ── Leave community ──────────────────────────────────────────────────────────
+  const [leaveState, setLeaveState] = useState("idle"); // "idle" | "pending" | "done"
+  const [leaveBusy, setLeaveBusy]   = useState(false);
+
+  // On mount: check if user already has a pending leave request
+  useState(() => {
+    if (user?.communityId) {
+      getPendingLeaveRequest(user.id).then((r) => {
+        if (r) setLeaveState("pending");
+      });
+    }
+  });
+
+  async function handleLeave() {
+    if (leaveBusy || leaveState !== "idle") return;
+    if (!community) return;
+    setLeaveBusy(true);
+    try {
+      const req = await createLeaveRequest({
+        userId: user.id,
+        userNickname: user.nickname,
+        userName: `${user.firstName} ${user.lastName}`,
+        communityId: community.id,
+      });
+
+      // Notify the user themselves
+      await createNotification({
+        recipientId: user.id,
+        title: "Өтінішіңіз жіберілді",
+        body: `«${community.name}» қоғамдастығынан шығу өтінішіңіз администраторға жіберілді. Жауап күтіңіз.`,
+        read: false,
+        type: "leave-request-sent",
+        requestId: req.id,
+        communityId: community.id,
+        communityName: community.name,
+      });
+
+      // Notify the admin
+      await createNotification({
+        recipientId: community.ownerId,
+        title: "Қоғамдастықтан шығу өтінімі",
+        body: `@${user.nickname} қоғамдастықтан шығуға өтініш берді.`,
+        read: false,
+        type: "leave-request",
+        requestId: req.id,
+        communityId: community.id,
+        userId: user.id,
+        userNickname: user.nickname,
+        userName: `${user.firstName} ${user.lastName}`,
+      });
+
+      setLeaveState("pending");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLeaveBusy(false);
     }
   }
 
@@ -335,6 +397,31 @@ export default function Settings() {
         </section>
 
         <Divider />
+
+        {/* ══ COMMUNITY ══════════════════════════════════════════════════════════ */}
+        {community && user?.role !== "admin" && (
+          <>
+            <section>
+              <h2 className="text-[17px] font-bold mb-1">Қоғамдастық</h2>
+              <p className="text-[13px] text-ink-500 mb-4">{community.name}</p>
+
+              {leaveState === "pending" ? (
+                <div className="rounded-2xl bg-ink-100 px-4 py-3 text-[13px] text-ink-500 text-center">
+                  Өтінішіңіз жіберілді. Администратор жауабын күтіңіз…
+                </div>
+              ) : (
+                <button
+                  onClick={handleLeave}
+                  disabled={leaveBusy}
+                  className="w-full text-left rounded-xl bg-badSoft text-bad font-semibold py-3 px-4 disabled:opacity-60"
+                >
+                  {leaveBusy ? "…" : "Қоғамдастықтан шығу"}
+                </button>
+              )}
+            </section>
+            <Divider />
+          </>
+        )}
 
         {/* ══ ACCOUNT ════════════════════════════════════════════════════════════ */}
         <section>
