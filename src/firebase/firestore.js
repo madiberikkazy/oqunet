@@ -167,9 +167,26 @@ export async function deleteBook(id) { return deleteOne("books", id); }
 // ---------- Posts ----------
 export async function createPost(payload) { return createOne("posts", payload); }
 export async function listPostsByCommunity(communityId, pageSize = 30) {
-  return getCollection("posts", {
+  // No orderBy here — avoids the Firestore composite index requirement.
+  // Sort client-side instead.
+  const rows = await getCollection("posts", {
     where: [["communityId", "==", communityId]],
-    orderByField: "createdAt", descending: true, pageSize,
+    pageSize,
+  });
+  return rows.sort((a, b) => {
+    const at = a.createdAt?.toMillis?.() ?? a.createdAt ?? 0;
+    const bt = b.createdAt?.toMillis?.() ?? b.createdAt ?? 0;
+    return bt - at;
+  });
+}
+
+// Fetch all posts across all communities (for global feed)
+export async function listAllPosts(pageSize = 100) {
+  const rows = await getCollection("posts", { pageSize });
+  return rows.sort((a, b) => {
+    const at = a.createdAt?.toMillis?.() ?? a.createdAt ?? 0;
+    const bt = b.createdAt?.toMillis?.() ?? b.createdAt ?? 0;
+    return bt - at;
   });
 }
 
