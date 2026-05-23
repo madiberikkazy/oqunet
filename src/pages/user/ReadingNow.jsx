@@ -4,7 +4,7 @@ import MobileShell from "../../components/MobileShell.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import {
-  listBorrowingsForUser, updateBorrowing, updateBook, createNotification,
+  listBorrowingsForUser, updateBorrowing, updateBook, createNotification, addRating,
 } from "../../firebase/firestore.js";
 import { t } from "../../utils/i18n.js";
 
@@ -15,6 +15,12 @@ export default function ReadingNow() {
   const [loading, setLoading] = useState(true);
   const [finishing, setFinishing] = useState(false);
 
+  // Rating modal state
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [stars, setStars] = useState(0);
+  const [hovered, setHovered] = useState(0);
+  const [review, setReview] = useState("");
+
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     listBorrowingsForUser(user.id, "active").then((rows) => {
@@ -23,12 +29,34 @@ export default function ReadingNow() {
     });
   }, [user?.id]);
 
-  async function handleFinish() {
+  // Called after rating is confirmed (or skipped)
+  async function finishBorrowing(ratingStars, reviewText) {
     if (!borrowing || finishing) return;
     setFinishing(true);
+    setRatingOpen(false);
     try {
-      await updateBorrowing(borrowing.id, { status: "completed" });
+      const now = Date.now();
+
+      // Save rating if user gave one
+      if (ratingStars > 0) {
+        await addRating({
+          bookId: borrowing.bookId,
+          userId: user.id,
+          stars: ratingStars,
+          review: reviewText.trim() || "",
+          createdAt: now,
+        });
+      }
+
+      // Complete the borrowing, store rating on the record too
+      await updateBorrowing(borrowing.id, {
+        status: "completed",
+        returnDate: now,
+        rating: ratingStars || 0,
+      });
+
       await updateBook(borrowing.bookId, { status: "available", borrowerId: null });
+
       if (borrowing.ownerId && borrowing.ownerId !== user.id) {
         await createNotification({
           recipientId: borrowing.ownerId,
@@ -45,6 +73,13 @@ export default function ReadingNow() {
     } finally {
       setFinishing(false);
     }
+  }
+
+  function openRatingModal() {
+    setStars(0);
+    setHovered(0);
+    setReview("");
+    setRatingOpen(true);
   }
 
   const daysLeft = borrowing
@@ -131,12 +166,84 @@ export default function ReadingNow() {
 
           {/* Finish button */}
           <button
-            onClick={handleFinish}
+            onClick={openRatingModal}
             disabled={finishing}
-            className="w-full py-3.5 rounded-2xl bg-bad text-white font-semibold text-[15px] active:scale-[0.99] transition disabled:opacity-60"
+            className="w-full py-3.5 rounded-2xl bg-ok text-white font-semibold text-[15px] active:scale-[0.99] transition disabled:opacity-60"
           >
             {finishing ? "…" : "Аяқтау"}
           </button>
+        </div>
+      )}
+
+      {/* ── Rating bottom sheet ── */}
+      {ratingOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setRatingOpen(false)}
+          />
+          <div className="relative bg-surface rounded-t-3xl px-6 pt-5 pb-10 space-y-5">
+            {/* Drag handle */}
+            <div className="w-10 h-1 rounded-full bg-ink-200 mx-auto" />
+
+            <div className="text-center">
+              <h2 className="text-[18px] font-bold">Кітапты бағалаңыз</h2>
+              <p className="text-[13px] text-ink-500 mt-1">«{borrowing?.bookName}»</p>
+            </div>
+
+            {/* Stars */}
+            <div className="flex justify-center gap-3">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStars(s)}
+                  onMouseEnter={() => setHovered(s)}
+                  onMouseLeave={() => setHovered(0)}
+                  className="transition active:scale-90"
+                >
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                      fill={(hovered || stars) >= s ? "#F59E0B" : "none"}
+                      stroke={(hovered || stars) >= s ? "#F59E0B" : "currentColor"}
+                      strokeWidth="1.6"
+                      strokeLinejoin="round"
+                      className={(hovered || stars) >= s ? "" : "text-ink-300"}
+                    />
+                  </svg>
+                </button>
+              ))}
+            </div>
+
+            {/* Optional review */}
+            <textarea
+              value={review}
+              onChange={(e) => setReview(e.target.value)}
+              placeholder="Пікіріңізді жазыңыз (міндетті емес)"
+              rows={3}
+              className="input resize-none text-[14px]"
+            />
+
+            {/* Actions */}
+            <div className="space-y-2">
+              <button
+                onClick={() => finishBorrowing(stars, review)}
+                disabled={finishing}
+                className="btn-primary"
+              >
+                {finishing ? "…" : stars > 0 ? "Бағалап аяқтау" : "Аяқтау"}
+              </button>
+              <button
+                onClick={() => finishBorrowing(0, "")}
+                disabled={finishing}
+                className="w-full py-3 text-[14px] text-ink-500 font-medium"
+              >
+                Бағаламай өту
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </MobileShell>
