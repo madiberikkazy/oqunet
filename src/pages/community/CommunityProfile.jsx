@@ -77,6 +77,8 @@ export default function CommunityProfile() {
         bookAuthor: bookForm.author,
         bookCoverUrl: bookForm.coverUrl,
       });
+
+      // Notify the admin about the request
       await createNotification({
         recipientId: community.ownerId,
         title: "Қоғамдастыққа кіруге ұсыныс",
@@ -86,6 +88,20 @@ export default function CommunityProfile() {
         communityId: id,
         requestId: req.id,
       });
+
+      // Notify the USER themselves — so they can track and cancel the request
+      await createNotification({
+        recipientId: user.id,
+        title: "Өтінішіңіз жіберілді",
+        body: `«${community.name}» қоғамдастығына қосылу өтінішіңіз администраторға жіберілді. Жауап күтіңіз.`,
+        read: false,
+        type: "join-request-sent",
+        communityId: id,
+        communityName: community.name,
+        requestId: req.id,
+        requestStatus: "pending",
+      });
+
       setJoinDone(true);
     } catch (err) {
       setJoinError(err?.message || "Қате");

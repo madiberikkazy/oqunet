@@ -225,6 +225,7 @@ export async function listJoinRequests(communityId) {
   });
 }
 export async function updateJoinRequest(id, patch) { return updateOne("requests", id, patch); }
+export async function cancelJoinRequest(id) { return updateOne("requests", id, { status: "cancelled" }); }
 
 // ---------- Pickup requests ----------
 // Stored in the same "requests" collection with type:"pickup".

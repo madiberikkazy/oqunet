@@ -6,6 +6,7 @@ import {
   updateNotification,
   updateUser,
   getCommunity,
+  cancelJoinRequest,
 } from "../../firebase/firestore.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
@@ -47,6 +48,22 @@ export default function NotificationDetail() {
       setCommunity(c);
     } catch (err) {
       setError(err?.message || "Ошибка");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCancelRequest() {
+    setBusy(true);
+    setError("");
+    try {
+      if (notification.requestId) {
+        await cancelJoinRequest(notification.requestId);
+      }
+      await updateNotification(id, { requestStatus: "cancelled", read: true });
+      setNotification((prev) => ({ ...prev, requestStatus: "cancelled", read: true }));
+    } catch (err) {
+      setError(err?.message || "Қате");
     } finally {
       setBusy(false);
     }
@@ -99,10 +116,13 @@ export default function NotificationDetail() {
       })
     : "";
 
-  const isJoinApproved = notification.type === "join-approved";
+  const isJoinApproved  = notification.type === "join-approved";
+  const isJoinRequestSent = notification.type === "join-request-sent";
   const isPending  = notification.confirmed === "pending";
   const isAccepted = notification.confirmed === "accepted";
   const isDeclined = notification.confirmed === "declined";
+
+  const requestCancelled = notification.requestStatus === "cancelled";
 
   // Show the code widget for ANY notification that carries a pickupCode field.
   const hasCode = Boolean(notification.pickupCode);
@@ -148,6 +168,42 @@ export default function NotificationDetail() {
             <p className="text-[12px] text-ink-500 text-center">
               Назовите этот код новому читателю, когда физически передадите книгу.
             </p>
+          </div>
+        ) : null}
+
+        {/* ── Join-request-sent: cancel button ── */}
+        {isJoinRequestSent ? (
+          <div className="space-y-3">
+            {/* Community card */}
+            {notification.communityName ? (
+              <div className="card px-4 py-3 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-brand-500">
+                    <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M3 21c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    <path d="M16 3.1a3 3 0 0 1 0 5.8M21 21c0-2.7-1.7-5-4-5.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-[15px]">{notification.communityName}</p>
+                  <p className="text-[12px] text-ink-500">Қоғамдастық</p>
+                </div>
+              </div>
+            ) : null}
+
+            {requestCancelled ? (
+              <div className="rounded-2xl bg-ink-100 px-4 py-3 text-[14px] text-ink-500 text-center">
+                Өтінішіңіз болдырылмады.
+              </div>
+            ) : (
+              <button
+                onClick={handleCancelRequest}
+                disabled={busy}
+                className="w-full py-3 rounded-2xl bg-bad/10 text-bad font-semibold text-[14px] active:scale-[0.99] transition disabled:opacity-60"
+              >
+                {busy ? "…" : "Өтінішті болдырмау"}
+              </button>
+            )}
           </div>
         ) : null}
 
