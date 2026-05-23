@@ -16,13 +16,15 @@ import { t } from "../../utils/i18n.js";
 export default function AdminNotification() {
   const { user } = useAuth();
   const { community } = useCommunity();
-  const [items, setItems] = useState([]);
-  const [joinRequests, setJoinRequests] = useState([]);
-  const [search, setSearch] = useState("");
-  const [sendOpen, setSendOpen] = useState(false);
-  const [members, setMembers] = useState([]);
-  const [form, setForm] = useState({ recipientId: "", title: "", body: "" });
-  const [loading, setLoading] = useState(true);
+
+  const [items, setItems]             = useState([]);
+  const [joinRequests, setJoinRequests] = useState([]);  // pending join requests
+  const [search, setSearch]           = useState("");
+  const [sendOpen, setSendOpen]       = useState(false);
+  const [members, setMembers]         = useState([]);
+  const [form, setForm]               = useState({ recipientId: "", title: "", body: "" });
+  const [loading, setLoading]         = useState(true);
+  const [busy, setBusy]               = useState(null); // requestId currently being processed
 
   useEffect(() => {
     if (!user) return;
@@ -34,6 +36,51 @@ export default function AdminNotification() {
       listUsersByCommunity(community.id).then(setMembers);
     }
   }, [user?.id, community?.id]);
+
+  // Build lookup: requestId → joinRequest (only pending ones)
+  const requestMap = {};
+  joinRequests.forEach((r) => { requestMap[r.id] = r; });
+
+  async function approve(req) {
+    setBusy(req.id);
+    try {
+      await updateJoinRequest(req.id, { status: "approved" });
+      await createNotification({
+        recipientId: req.userId,
+        title: "Заявка одобрена 🎉",
+        body: `Администратор сообщества «${community.name}» одобрил вашу заявку. Хотите вступить?`,
+        read: false,
+        type: "join-approved",
+        communityId: community.id,
+        communityName: community.name,
+        bookName: req.bookName || "",
+        bookAuthor: req.bookAuthor || "",
+        bookDescription: req.bookDescription || "",
+        bookCoverUrl: req.bookCoverUrl || "",
+        confirmed: "pending",
+      });
+      setJoinRequests((prev) => prev.filter((r) => r.id !== req.id));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function reject(req) {
+    setBusy(req.id);
+    try {
+      await updateJoinRequest(req.id, { status: "rejected" });
+      await createNotification({
+        recipientId: req.userId,
+        title: "Заявка отклонена",
+        body: `К сожалению, ваша заявка в сообщество «${community?.name}» была отклонена.`,
+        read: false,
+        type: "join-rejected",
+      });
+      setJoinRequests((prev) => prev.filter((r) => r.id !== req.id));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function send(e) {
     e.preventDefault();
@@ -51,38 +98,6 @@ export default function AdminNotification() {
     alert("Отправлено");
   }
 
-  async function approve(req) {
-    await updateJoinRequest(req.id, { status: "approved" });
-    await createNotification({
-      recipientId: req.userId,
-      title: "Заявка одобрена 🎉",
-      body: `Администратор сообщества «${community.name}» одобрил вашу заявку. Хотите вступить?`,
-      read: false,
-      type: "join-approved",
-      communityId: community.id,
-      communityName: community.name,
-      bookName: req.bookName || "",
-      bookAuthor: req.bookAuthor || "",
-      bookDescription: req.bookDescription || "",
-      bookCoverUrl: req.bookCoverUrl || "",
-      // "pending" as a string — Firestore drops null fields, breaking equality checks
-      confirmed: "pending",
-    });
-    setJoinRequests((prev) => prev.filter((r) => r.id !== req.id));
-  }
-
-  async function reject(req) {
-    await updateJoinRequest(req.id, { status: "rejected" });
-    await createNotification({
-      recipientId: req.userId,
-      title: "Заявка отклонена",
-      body: `К сожалению, ваша заявка в сообщество «${community?.name}» была отклонена.`,
-      read: false,
-      type: "join-rejected",
-    });
-    setJoinRequests((prev) => prev.filter((r) => r.id !== req.id));
-  }
-
   const filtered = items.filter(
     (n) =>
       !search ||
@@ -94,43 +109,10 @@ export default function AdminNotification() {
     <MobileShell>
       <SearchBar value={search} onChange={setSearch} placeholder="Поиск" />
 
-      {joinRequests.length > 0 ? (
-        <section className="px-4 mt-3">
-          <h3 className="section-title mb-2">Заявки на вступление</h3>
-          <ul className="card divide-y divide-ink-100">
-            {joinRequests.map((r) => (
-              <li key={r.id} className="px-4 py-3">
-                <p className="font-medium">@{r.userNickname}</p>
-                <p className="text-[13px] text-ink-500">
-                  Планирует добавить: «{r.bookName}»
-                </p>
-                {r.bookAuthor ? (
-                  <p className="text-[12px] text-ink-400">Автор: {r.bookAuthor}</p>
-                ) : null}
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => approve(r)}
-                    className="flex-1 py-2 bg-brand-500 text-white rounded-lg text-[13px] font-medium"
-                  >
-                    Одобрить
-                  </button>
-                  <button
-                    onClick={() => reject(r)}
-                    className="flex-1 py-2 bg-badSoft text-bad rounded-lg text-[13px] font-medium"
-                  >
-                    Отклонить
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <section className="mt-2">
         {loading ? (
           <p className="px-6 py-12 text-center text-ink-500">Загрузка...</p>
-        ) : filtered.length === 0 && joinRequests.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <EmptyState
             title={t.noNotifications}
             subtitle={t.noNotificationsHint}
@@ -142,11 +124,53 @@ export default function AdminNotification() {
           />
         ) : (
           <ul>
-            {filtered.map((n) => (
-              <li key={n.id}>
-                <NotificationItem notification={n} />
-              </li>
-            ))}
+            {filtered.map((n) => {
+              // If this is a pending join-request notification → show inline accept/decline
+              const req = n.type === "join-request" ? requestMap[n.requestId] : null;
+
+              if (req) {
+                const isBusy = busy === req.id;
+                const date = n.createdAt
+                  ? new Date(n.createdAt?.toMillis?.() ?? n.createdAt)
+                      .toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" })
+                  : "";
+                return (
+                  <li key={n.id} className="px-4 py-4 border-b border-ink-100 last:border-b-0">
+                    {/* Header row */}
+                    <div className="flex items-start justify-between gap-2 mb-0.5">
+                      <p className="font-semibold text-[15px] leading-snug">{n.title}</p>
+                      {date ? <span className="text-[11px] text-ink-500 shrink-0 mt-0.5">{date}</span> : null}
+                    </div>
+                    {/* Body */}
+                    <p className="text-[13px] text-ink-500 mb-3 leading-relaxed">{n.body}</p>
+                    {/* Inline action buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        disabled={isBusy}
+                        onClick={() => approve(req)}
+                        className="flex-1 py-2.5 rounded-xl bg-brand-500 text-white text-[13px] font-semibold active:scale-[0.98] transition disabled:opacity-60"
+                      >
+                        {isBusy ? "…" : "Одобрить"}
+                      </button>
+                      <button
+                        disabled={isBusy}
+                        onClick={() => reject(req)}
+                        className="flex-1 py-2.5 rounded-xl bg-badSoft text-bad text-[13px] font-semibold active:scale-[0.98] transition disabled:opacity-60"
+                      >
+                        {isBusy ? "…" : "Отклонить"}
+                      </button>
+                    </div>
+                  </li>
+                );
+              }
+
+              // All other notification types → regular tappable row
+              return (
+                <li key={n.id}>
+                  <NotificationItem notification={n} />
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
