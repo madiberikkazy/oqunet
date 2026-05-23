@@ -14,7 +14,7 @@ export default function CreateCommunity() {
   const { setCommunity } = useCommunity();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    nickname: "", name: "", notificationsEnabled: true,
+    nickname: "", name: "", isPrivate: false, notificationsEnabled: true,
   });
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -45,7 +45,7 @@ export default function CreateCommunity() {
         return;
       }
     }
-    if (step < 3) { setStep(step + 1); return; }
+    if (step < 4) { setStep(step + 1); return; }
     submit();
   }
 
@@ -94,7 +94,7 @@ export default function CreateCommunity() {
           </svg>
         </button>
         <div className="flex-1">
-          <Stepper step={step} total={3} title="Новое сообщество" />
+          <Stepper step={step} total={4} title="Новое сообщество" />
         </div>
       </div>
 
@@ -128,7 +128,74 @@ export default function CreateCommunity() {
 
         {step === 2 ? (
           <>
-            <h2 className="text-xl font-bold mb-2">Шаг 2 — Уведомления</h2>
+            <h2 className="text-xl font-bold mb-2">Қадам 2 — Формат</h2>
+            <p className="text-[13px] text-ink-500 mb-3">Қоғамдастықтың көріну режимін таңдаңыз</p>
+
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isPrivate: false })}
+              className={
+                "w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition mb-3 text-left " +
+                (!form.isPrivate
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-ink-100 bg-surface")
+              }
+            >
+              <div className={
+                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 " +
+                (!form.isPrivate ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-500")
+              }>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-[15px]">Ашық (Public)</p>
+                <p className="text-[13px] text-ink-500 mt-0.5">Барлығы мүшелерді, кітаптарды және жазбаларды көре алады</p>
+              </div>
+              {!form.isPrivate && (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-brand-500 shrink-0">
+                  <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, isPrivate: true })}
+              className={
+                "w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition text-left " +
+                (form.isPrivate
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-ink-100 bg-surface")
+              }
+            >
+              <div className={
+                "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 " +
+                (form.isPrivate ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-500")
+              }>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-[15px]">Жабық (Private)</p>
+                <p className="text-[13px] text-ink-500 mt-0.5">Тек мүшелер ішкі контентті көреді. Бейтаныс адамдар тек атауды ғана көреді</p>
+              </div>
+              {form.isPrivate && (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-brand-500 shrink-0">
+                  <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+          </>
+        ) : null}
+
+        {step === 3 ? (
+          <>
+            <h2 className="text-xl font-bold mb-2">Қадам 3 — Хабарламалар</h2>
             <label className="card p-4 flex items-center gap-3">
               <input
                 type="checkbox"
@@ -137,15 +204,15 @@ export default function CreateCommunity() {
                 className="w-5 h-5 accent-brand-500"
               />
               <span className="text-[14px]">
-                Включить системные уведомления для участников
+                Мүшелер үшін жүйелік хабарламаларды қосу
               </span>
             </label>
           </>
         ) : null}
 
-        {step === 3 ? (
+        {step === 4 ? (
           <>
-            <h2 className="text-xl font-bold mb-2">Шаг 3 — {t.communityPhoto}</h2>
+            <h2 className="text-xl font-bold mb-2">Қадам 4 — {t.communityPhoto}</h2>
 
             {/* Hidden file input — triggered by button click via ref */}
             <input
@@ -206,7 +273,7 @@ export default function CreateCommunity() {
 
       <div className="absolute bottom-4 left-0 right-0 px-5">
         <button onClick={next} disabled={submitting} className="btn-primary">
-          {submitting ? (submitStatus || "…") : step === 3 ? "Создать" : t.next}
+          {submitting ? (submitStatus || "…") : step === 4 ? "Жасау" : t.next}
         </button>
       </div>
     </MobileShell>
