@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
 import Avatar from "../../components/Avatar.jsx";
@@ -13,7 +13,6 @@ import {
 export default function Home() {
   const { user }      = useAuth();
   const { community } = useCommunity();
-  const navigate      = useNavigate();
 
   const [feed, setFeed]             = useState([]);   // enriched posts with communityMeta
   const [loading, setLoading]       = useState(true);
@@ -133,12 +132,28 @@ export default function Home() {
             <p className="text-center text-ink-500 py-8">Ештеңе табылмады</p>
           )}
         </div>
-      ) : !community ? (
-        /* ── No community state ── */
-        <NoCommunityState navigate={navigate} />
       ) : (
-        /* ── Global feed ── */
+        /* ── Global feed (visible to all users, with or without a community) ── */
         <div className="px-4 mt-2">
+          {/* Prompt for users not yet in a community */}
+          {!community && (
+            <div className="card px-4 py-3 mb-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-brand-500">
+                  <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M3 21c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  <path d="M16 3.1a3 3 0 0 1 0 5.8M21 21c0-2.7-1.7-5-4-5.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-ink-700">Қоғамдастыққа қосылыңыз</p>
+                <p className="text-[12px] text-ink-400">Кітаптарды алу үшін қоғамдастық керек</p>
+              </div>
+              <Link to="/community/join" className="text-[12px] font-semibold text-brand-600 shrink-0">
+                Табу →
+              </Link>
+            </div>
+          )}
           {loading ? (
             <div className="space-y-3 mt-2">
               {[1, 2, 3].map((i) => (
@@ -233,27 +248,5 @@ export default function Home() {
         </div>
       )}
     </MobileShell>
-  );
-}
-
-function NoCommunityState({ navigate }) {
-  return (
-    <div className="px-6 pt-12 text-center">
-      <div className="w-24 h-24 rounded-full bg-brand-50 mx-auto flex items-center justify-center mb-4">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" className="text-brand-500">
-          <circle cx="9" cy="7" r="3" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M3 21c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M16 3.1a3 3 0 0 1 0 5.8M21 21c0-2.7-1.7-5-4-5.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      </div>
-      <h2 className="text-xl font-bold">Қоғамдастыққа кіріңіз</h2>
-      <p className="text-ink-500 text-[14px] mt-2 max-w-xs mx-auto leading-relaxed">
-        Кітаптарға қол жеткізу үшін қоғамдастыққа өтініш беріңіз немесе өзіңіз жасаңыз.
-      </p>
-      <div className="mt-6 space-y-3 max-w-xs mx-auto">
-        <Link to="/community/join" className="btn-primary block text-center">Қоғамдастық табу</Link>
-        <Link to="/community/create" className="btn-secondary block text-center">Жасау</Link>
-      </div>
-    </div>
   );
 }
