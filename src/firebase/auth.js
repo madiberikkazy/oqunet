@@ -1,4 +1,4 @@
-// Auth helpers — email + password.
+// Auth helpers — email + password + Google.
 // Uses Firebase Authentication when configured. Falls back to a localStorage-based
 // mock so the UI is fully usable during development without a backend.
 
@@ -6,12 +6,15 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut as fbSignOut,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from "firebase/auth";
 import { auth, isFirebaseConfigured } from "./config.js";
 import {
   createUserDoc,
   getUserByEmail,
   getUserByNickname,
+  getUserById,
 } from "./firestore.js";
 
 const STORE_KEY = "oqunet:auth";
@@ -99,4 +102,57 @@ export async function signOut() {
 
 export function getMockSession() {
   return readMock();
+}
+
+/**
+ * Sign in (or register) with Google via popup.
+ * - Returning users: loads existing profile from Firestore.
+ * - New users: auto-creates a profile with data from the Google account.
+ *   Nickname is derived from the email prefix (unique suffix added if needed).
+ *   The user can update nickname/photo in Settings afterwards.
+ */
+export async function signInWithGoogle() {
+  if (!isFirebaseConfigured) {
+    throw new Error("Google sign-in requires Firebase. Configure .env first.");
+  }
+  const provider = new GoogleAuthProvider();
+  const cred = await signInWithPopup(auth, provider);
+  const fbUser = cred.user;
+
+  // Check if this Google account already has a profile
+  let profile = await getUserById(fbUser.uid);
+
+  if (!profile) {
+    // New user — build a profile from Google account data
+    const nameParts = (fbUser.displayName || "").split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName  = nameParts.slice(1).join(" ") || "";
+
+    // Derive a unique nickname from the email prefix
+    const base = (fbUser.email || "user").split("@")[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "");
+    let nickname = base || "user";
+    let suffix = 1;
+    while (await getUserByNickname(nickname)) {
+      nickname = base + suffix++;
+    }
+
+    profile = {
+      id: fbUser.uid,
+      email: (fbUser.email || "").toLowerCase(),
+      nickname,
+      firstName,
+      lastName,
+      photoURL: fbUser.photoURL || "",
+      notificationsEnabled: true,
+      role: "user",
+      communityId: null,
+      createdAt: Date.now(),
+    };
+    await createUserDoc(profile);
+  }
+
+  writeMock({ uid: fbUser.uid });
+  return profile;
 }
