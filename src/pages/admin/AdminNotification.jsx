@@ -7,9 +7,10 @@ import NotificationItem from "../../components/NotificationItem.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
+import { useNotifications } from "../../contexts/NotificationContext.jsx";
 import {
   createNotification,
-  listJoinRequests, listNotifications, listLeaveRequests,
+  listJoinRequests, listLeaveRequests,
   listUsersByCommunity,
   updateJoinRequest, updateLeaveRequest, updateUser,
 } from "../../firebase/firestore.js";
@@ -18,20 +19,18 @@ import { t } from "../../utils/i18n.js";
 export default function AdminNotification() {
   const { user } = useAuth();
   const { community } = useCommunity();
+  const { notifications, loadNotifications, loading } = useNotifications();
 
-  const [items, setItems]               = useState([]);
   const [joinRequests, setJoinRequests] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [search, setSearch]             = useState("");
   const [sendOpen, setSendOpen]         = useState(false);
   const [members, setMembers]           = useState([]);
   const [form, setForm]                 = useState({ recipientId: "", title: "", body: "" });
-  const [loading, setLoading]           = useState(true);
   const [busy, setBusy]                 = useState(null); // requestId being processed
 
   useEffect(() => {
-    if (!user) return;
-    listNotifications(user.id).then(setItems).finally(() => setLoading(false));
+    loadNotifications();
     if (community?.id) {
       listJoinRequests(community.id).then((rows) =>
         setJoinRequests(rows.filter((r) => r.status === "pending"))
@@ -39,7 +38,7 @@ export default function AdminNotification() {
       listLeaveRequests(community.id).then(setLeaveRequests);
       listUsersByCommunity(community.id).then(setMembers);
     }
-  }, [user?.id, community?.id]);
+  }, [community?.id, loadNotifications]);
 
   // Lookup maps: requestId → request object
   const joinMap  = {};  joinRequests.forEach((r)  => { joinMap[r.id]  = r; });
@@ -138,10 +137,11 @@ export default function AdminNotification() {
     });
     setForm({ recipientId: "", title: "", body: "" });
     setSendOpen(false);
+    await loadNotifications();
     alert("Отправлено");
   }
 
-  const filtered = items.filter(
+  const filtered = notifications.filter(
     (n) =>
       !search ||
       n.title?.toLowerCase().includes(search.toLowerCase()) ||
