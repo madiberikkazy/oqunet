@@ -22,7 +22,8 @@ export default function CommunityProfile() {
   const [posts, setPosts]           = useState([]);
   const [books, setBooks]           = useState([]);
   const [tab, setTab]               = useState("posts");
-  const [loading, setLoading]       = useState(true);
+  const [headerLoading, setHeaderLoading] = useState(true); // only blocks the header
+  const [contentLoading, setContentLoading] = useState(true);
 
   // Join modal
   const [joinOpen, setJoinOpen]     = useState(false);
@@ -32,20 +33,26 @@ export default function CommunityProfile() {
   const [joinDone, setJoinDone]     = useState(false);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const [c, m, p, b] = await Promise.all([
-        getCommunity(id),
-        listUsersByCommunity(id),
-        listPostsByCommunity(id),
-        listBooks({ communityId: id }),
-      ]);
+    setHeaderLoading(true);
+    setContentLoading(true);
+
+    // Step 1 — load community doc first so the page opens instantly
+    getCommunity(id).then((c) => {
       setCommunity(c);
-      setMembers(m);
-      setPosts(p);
-      setBooks(b);
-      setLoading(false);
-    })();
+      setHeaderLoading(false);
+
+      // Step 2 — load the rest in the background; errors are swallowed gracefully
+      Promise.allSettled([
+        listUsersByCommunity(id),
+        listBooks({ communityId: id }),
+        listPostsByCommunity(id),
+      ]).then(([m, b, p]) => {
+        if (m.status === "fulfilled") setMembers(m.value);
+        if (b.status === "fulfilled") setBooks(b.value);
+        if (p.status === "fulfilled") setPosts(p.value);
+        setContentLoading(false);
+      });
+    }).catch(() => setHeaderLoading(false));
   }, [id]);
 
   const isMember  = user?.communityId === id;
@@ -87,10 +94,24 @@ export default function CommunityProfile() {
     }
   }
 
-  if (loading) {
+  if (headerLoading) {
     return (
       <MobileShell>
-        <p className="px-6 py-12 text-center text-ink-500">Жүктелуде...</p>
+        <div className="flex items-center gap-3 px-4 mb-4">
+          <button onClick={() => navigate(-1)} className="icon-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        <div className="px-4 pt-4 flex items-center gap-5 animate-pulse">
+          <div className="w-20 h-20 rounded-full bg-ink-100 shrink-0" />
+          <div className="flex-1 grid grid-cols-3 gap-2">
+            <div className="h-8 rounded-lg bg-ink-100" />
+            <div className="h-8 rounded-lg bg-ink-100" />
+            <div className="h-8 rounded-lg bg-ink-100" />
+          </div>
+        </div>
       </MobileShell>
     );
   }
@@ -128,15 +149,21 @@ export default function CommunityProfile() {
           {/* Stats */}
           <div className="flex-1 grid grid-cols-3 text-center">
             <div>
-              <p className="font-bold text-[20px] leading-none">{members.length}</p>
+              <p className="font-bold text-[20px] leading-none">
+                {contentLoading ? <span className="inline-block w-6 h-5 rounded bg-ink-100 animate-pulse" /> : members.length}
+              </p>
               <p className="text-[11px] text-ink-500 mt-1">мүше</p>
             </div>
             <div>
-              <p className="font-bold text-[20px] leading-none">{books.length}</p>
+              <p className="font-bold text-[20px] leading-none">
+                {contentLoading ? <span className="inline-block w-6 h-5 rounded bg-ink-100 animate-pulse" /> : books.length}
+              </p>
               <p className="text-[11px] text-ink-500 mt-1">кітап</p>
             </div>
             <div>
-              <p className="font-bold text-[20px] leading-none">{posts.length}</p>
+              <p className="font-bold text-[20px] leading-none">
+                {contentLoading ? <span className="inline-block w-6 h-5 rounded bg-ink-100 animate-pulse" /> : posts.length}
+              </p>
               <p className="text-[11px] text-ink-500 mt-1">жазба</p>
             </div>
           </div>
@@ -211,8 +238,16 @@ export default function CommunityProfile() {
           </div>
 
           <div className="px-4 mt-3 pb-4">
+            {contentLoading && (
+              <div className="space-y-3 mt-2">
+                {[1,2,3].map(i => (
+                  <div key={i} className="h-16 rounded-2xl bg-ink-100 animate-pulse" />
+                ))}
+              </div>
+            )}
+
             {/* Posts tab */}
-            {tab === "posts" && (
+            {!contentLoading && tab === "posts" && (
               posts.length === 0 ? (
                 <p className="text-center text-ink-400 text-[14px] py-10">Жазба жоқ.</p>
               ) : (
@@ -228,7 +263,7 @@ export default function CommunityProfile() {
             )}
 
             {/* Books tab */}
-            {tab === "books" && (
+            {!contentLoading && tab === "books" && (
               books.length === 0 ? (
                 <p className="text-center text-ink-400 text-[14px] py-10">Кітап жоқ.</p>
               ) : (
@@ -260,7 +295,7 @@ export default function CommunityProfile() {
             )}
 
             {/* Members tab */}
-            {tab === "members" && (
+            {!contentLoading && tab === "members" && (
               members.length === 0 ? (
                 <p className="text-center text-ink-400 text-[14px] py-10">Мүше жоқ.</p>
               ) : (
