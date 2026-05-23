@@ -8,8 +8,10 @@ import EmptyState from "../../components/EmptyState.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import {
-  createNotification, listJoinRequests, listNotifications,
-  listUsersByCommunity, updateJoinRequest,
+  createNotification,
+  listJoinRequests, listNotifications, listLeaveRequests,
+  listUsersByCommunity,
+  updateJoinRequest, updateLeaveRequest, updateUser,
 } from "../../firebase/firestore.js";
 import { t } from "../../utils/i18n.js";
 
@@ -17,14 +19,15 @@ export default function AdminNotification() {
   const { user } = useAuth();
   const { community } = useCommunity();
 
-  const [items, setItems]             = useState([]);
-  const [joinRequests, setJoinRequests] = useState([]);  // pending join requests
-  const [search, setSearch]           = useState("");
-  const [sendOpen, setSendOpen]       = useState(false);
-  const [members, setMembers]         = useState([]);
-  const [form, setForm]               = useState({ recipientId: "", title: "", body: "" });
-  const [loading, setLoading]         = useState(true);
-  const [busy, setBusy]               = useState(null); // requestId currently being processed
+  const [items, setItems]               = useState([]);
+  const [joinRequests, setJoinRequests] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [search, setSearch]             = useState("");
+  const [sendOpen, setSendOpen]         = useState(false);
+  const [members, setMembers]           = useState([]);
+  const [form, setForm]                 = useState({ recipientId: "", title: "", body: "" });
+  const [loading, setLoading]           = useState(true);
+  const [busy, setBusy]                 = useState(null); // requestId being processed
 
   useEffect(() => {
     if (!user) return;
@@ -33,15 +36,17 @@ export default function AdminNotification() {
       listJoinRequests(community.id).then((rows) =>
         setJoinRequests(rows.filter((r) => r.status === "pending"))
       );
+      listLeaveRequests(community.id).then(setLeaveRequests);
       listUsersByCommunity(community.id).then(setMembers);
     }
   }, [user?.id, community?.id]);
 
-  // Build lookup: requestId → joinRequest (only pending ones)
-  const requestMap = {};
-  joinRequests.forEach((r) => { requestMap[r.id] = r; });
+  // Lookup maps: requestId → request object
+  const joinMap  = {};  joinRequests.forEach((r)  => { joinMap[r.id]  = r; });
+  const leaveMap = {};  leaveRequests.forEach((r) => { leaveMap[r.id] = r; });
 
-  async function approve(req) {
+  // ── Join: approve ───────────────────────────────────────────────────────────
+  async function approveJoin(req) {
     setBusy(req.id);
     try {
       await updateJoinRequest(req.id, { status: "approved" });
@@ -65,7 +70,8 @@ export default function AdminNotification() {
     }
   }
 
-  async function reject(req) {
+  // ── Join: reject ────────────────────────────────────────────────────────────
+  async function rejectJoin(req) {
     setBusy(req.id);
     try {
       await updateJoinRequest(req.id, { status: "rejected" });
@@ -77,6 +83,43 @@ export default function AdminNotification() {
         type: "join-rejected",
       });
       setJoinRequests((prev) => prev.filter((r) => r.id !== req.id));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // ── Leave: approve ──────────────────────────────────────────────────────────
+  async function approveLeave(req) {
+    setBusy(req.id);
+    try {
+      await updateLeaveRequest(req.id, { status: "approved" });
+      await updateUser(req.userId, { communityId: null });
+      await createNotification({
+        recipientId: req.userId,
+        title: "Өтінішіңіз қабылданды",
+        body: `Администратор сіздің «${community.name}» қоғамдастығынан шығу өтінішіңізді қабылдады.`,
+        read: false,
+        type: "leave-approved",
+      });
+      setLeaveRequests((prev) => prev.filter((r) => r.id !== req.id));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // ── Leave: reject ───────────────────────────────────────────────────────────
+  async function rejectLeave(req) {
+    setBusy(req.id);
+    try {
+      await updateLeaveRequest(req.id, { status: "rejected" });
+      await createNotification({
+        recipientId: req.userId,
+        title: "Өтінішіңіз қабылданбады",
+        body: `Администратор сіздің «${community?.name}» қоғамдастығынан шығу өтінішіңізді қабылдамады.`,
+        read: false,
+        type: "leave-rejected",
+      });
+      setLeaveRequests((prev) => prev.filter((r) => r.id !== req.id));
     } finally {
       setBusy(null);
     }
@@ -125,46 +168,45 @@ export default function AdminNotification() {
         ) : (
           <ul>
             {filtered.map((n) => {
-              // If this is a pending join-request notification → show inline accept/decline
-              const req = n.type === "join-request" ? requestMap[n.requestId] : null;
+              const joinReq  = n.type === "join-request"  ? joinMap[n.requestId]  : null;
+              const leaveReq = n.type === "leave-request" ? leaveMap[n.requestId] : null;
+              const actionReq = joinReq || leaveReq;
 
-              if (req) {
-                const isBusy = busy === req.id;
+              if (actionReq) {
+                const isBusy = busy === actionReq.id;
+                const isLeave = Boolean(leaveReq);
                 const date = n.createdAt
                   ? new Date(n.createdAt?.toMillis?.() ?? n.createdAt)
                       .toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" })
                   : "";
+
                 return (
                   <li key={n.id} className="px-4 py-4 border-b border-ink-100 last:border-b-0">
-                    {/* Header row */}
                     <div className="flex items-start justify-between gap-2 mb-0.5">
                       <p className="font-semibold text-[15px] leading-snug">{n.title}</p>
                       {date ? <span className="text-[11px] text-ink-500 shrink-0 mt-0.5">{date}</span> : null}
                     </div>
-                    {/* Body */}
                     <p className="text-[13px] text-ink-500 mb-3 leading-relaxed">{n.body}</p>
-                    {/* Inline action buttons */}
                     <div className="flex gap-2">
                       <button
                         disabled={isBusy}
-                        onClick={() => approve(req)}
+                        onClick={() => isLeave ? approveLeave(actionReq) : approveJoin(actionReq)}
                         className="flex-1 py-2.5 rounded-xl bg-brand-500 text-white text-[13px] font-semibold active:scale-[0.98] transition disabled:opacity-60"
                       >
-                        {isBusy ? "…" : "Одобрить"}
+                        {isBusy ? "…" : "Қабылдау"}
                       </button>
                       <button
                         disabled={isBusy}
-                        onClick={() => reject(req)}
+                        onClick={() => isLeave ? rejectLeave(actionReq) : rejectJoin(actionReq)}
                         className="flex-1 py-2.5 rounded-xl bg-badSoft text-bad text-[13px] font-semibold active:scale-[0.98] transition disabled:opacity-60"
                       >
-                        {isBusy ? "…" : "Отклонить"}
+                        {isBusy ? "…" : "Бас тарту"}
                       </button>
                     </div>
                   </li>
                 );
               }
 
-              // All other notification types → regular tappable row
               return (
                 <li key={n.id}>
                   <NotificationItem notification={n} />

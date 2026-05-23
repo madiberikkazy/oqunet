@@ -244,6 +244,23 @@ export async function listJoinRequests(communityId) {
 export async function updateJoinRequest(id, patch) { return updateOne("requests", id, patch); }
 export async function cancelJoinRequest(id) { return updateOne("requests", id, { status: "cancelled" }); }
 
+// ---------- Leave requests ----------
+export async function createLeaveRequest(payload) {
+  return createOne("requests", { type: "leave", status: "pending", ...payload });
+}
+export async function listLeaveRequests(communityId) {
+  return getCollection("requests", {
+    where: [["communityId", "==", communityId], ["type", "==", "leave"], ["status", "==", "pending"]],
+  });
+}
+export async function getPendingLeaveRequest(userId) {
+  const rows = await getCollection("requests", {
+    where: [["userId", "==", userId], ["type", "==", "leave"], ["status", "==", "pending"]],
+  });
+  return rows[0] || null;
+}
+export async function updateLeaveRequest(id, patch) { return updateOne("requests", id, patch); }
+
 // ---------- Pickup requests ----------
 // Stored in the same "requests" collection with type:"pickup".
 // One pending request per user per book at a time.
