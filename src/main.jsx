@@ -6,6 +6,7 @@ import { AuthProvider } from "./contexts/AuthContext.jsx";
 import { CommunityProvider } from "./contexts/CommunityContext.jsx";
 import { ThemeProvider } from "./contexts/ThemeContext.jsx";
 import { LanguageProvider } from "./contexts/LanguageContext.jsx";
+import { NotificationProvider } from "./contexts/NotificationContext.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -14,9 +15,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <LanguageProvider>
         <BrowserRouter>
           <AuthProvider>
-            <CommunityProvider>
-              <App />
-            </CommunityProvider>
+            <NotificationProvider>
+              <CommunityProvider>
+                <App />
+              </CommunityProvider>
+            </NotificationProvider>
           </AuthProvider>
         </BrowserRouter>
       </LanguageProvider>

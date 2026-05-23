@@ -19,6 +19,14 @@ import {
 } from "../../firebase/firestore.js";
 import { uploadImage } from "../../firebase/storage.js";
 import { t } from "../../utils/i18n.js";
+import { 
+  NOTIFICATION_SOUNDS, 
+  loadNotificationPreferences, 
+  saveNotificationPreferences,
+  requestNotificationPermission,
+  getNotificationPermissionStatus,
+  areNotificationsSupported 
+} from "../../utils/notificationService.js";
 
 export default function Settings() {
   const navigate     = useNavigate();
@@ -38,6 +46,28 @@ export default function Settings() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [saving, setSaving]             = useState(false);
   const [profileMsg, setProfileMsg]     = useState(null); // { type: "ok"|"err", text }
+
+  // ── Notification preferences ───────────────────────────────────────────────
+  const [notifPrefs, setNotifPrefs] = useState(() => loadNotificationPreferences());
+  const notificationPermission = getNotificationPermissionStatus();
+  const notificationsSupported = areNotificationsSupported();
+
+  function updateNotifPref(key, value) {
+    const updated = { ...notifPrefs, [key]: value };
+    setNotifPrefs(updated);
+    saveNotificationPreferences(updated);
+  }
+
+  async function enableBrowserNotifications() {
+    if (!notificationsSupported) {
+      alert("Your browser does not support notifications");
+      return;
+    }
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      updateNotifPref('browserNotificationsEnabled', true);
+    }
+  }
 
   function updateForm(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -369,18 +399,93 @@ export default function Settings() {
         {/* ══ PREFERENCES ════════════════════════════════════════════════════════ */}
         <section>
           <h2 className="text-[17px] font-bold mb-4">{t.notifications}</h2>
-          <div className="flex items-center justify-between">
+          
+          {/* Enable/Disable notifications */}
+          <div className="flex items-center justify-between py-3 border-b border-ink-100">
             <span className="text-[14px] text-ink-700">{t.enableNotifications}</span>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 className="sr-only peer"
-                checked={Boolean(user?.notificationsEnabled)}
-                onChange={(e) => updateProfile({ notificationsEnabled: e.target.checked })}
+                checked={notifPrefs.notificationsEnabled}
+                onChange={(e) => updateNotifPref('notificationsEnabled', e.target.checked)}
               />
               <div className="w-11 h-6 rounded-full bg-ink-300 peer-checked:bg-brand-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
             </label>
           </div>
+
+          {notifPrefs.notificationsEnabled && (
+            <>
+              {/* Sound Settings */}
+              <div className="py-3 border-b border-ink-100">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[14px] text-ink-700">Дыбыс эффектілері</span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={notifPrefs.soundEnabled}
+                      onChange={(e) => updateNotifPref('soundEnabled', e.target.checked)}
+                    />
+                    <div className="w-11 h-6 rounded-full bg-ink-300 peer-checked:bg-brand-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                  </label>
+                </div>
+
+                {notifPrefs.soundEnabled && (
+                  <div>
+                    <label className="block text-[12px] text-ink-500 mb-2">Дыбыс түрін таңдаңыз</label>
+                    <select
+                      value={notifPrefs.selectedSound}
+                      onChange={(e) => updateNotifPref('selectedSound', e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-ink-200 bg-surface text-[14px] text-ink-700"
+                    >
+                      {Object.entries(NOTIFICATION_SOUNDS).map(([key, sound]) => (
+                        <option key={key} value={key}>
+                          {sound.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Browser Notifications */}
+              {notificationsSupported && (
+                <div className="py-3 border-b border-ink-100">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <span className="text-[14px] text-ink-700">Браузер құлақтандырулары</span>
+                      <p className="text-[12px] text-ink-500 mt-0.5">
+                        {notificationPermission === 'granted' 
+                          ? 'Рұқсат берілген' 
+                          : notificationPermission === 'denied' 
+                          ? 'Рұқсат құлыптаулы' 
+                          : 'Рұқсат сұралмаған'}
+                      </p>
+                    </div>
+                    {notificationPermission === 'granted' ? (
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={notifPrefs.browserNotificationsEnabled}
+                          onChange={(e) => updateNotifPref('browserNotificationsEnabled', e.target.checked)}
+                        />
+                        <div className="w-11 h-6 rounded-full bg-ink-300 peer-checked:bg-brand-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+                      </label>
+                    ) : (
+                      <button
+                        onClick={enableBrowserNotifications}
+                        className="text-[13px] text-brand-500 font-medium px-3 py-1.5 rounded-lg bg-brand-500/10 hover:bg-brand-500/20 transition"
+                      >
+                        Рұқсат өтінеу
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </section>
 
         <Divider />

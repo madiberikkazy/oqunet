@@ -1,9 +1,11 @@
 import { NavLink } from "react-router-dom";
 import { useLang } from "../contexts/LanguageContext.jsx";
+import { useNotifications } from "../contexts/NotificationContext.jsx";
 import { t } from "../utils/i18n.js";
 
 export default function BottomNav() {
   useLang(); // subscribe to language changes so labels re-render
+  const { unreadCount } = useNotifications();
 
   const items = [
     {
@@ -32,9 +34,16 @@ export default function BottomNav() {
       to: "/notifications",
       label: t.navNotification,
       icon: () => (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <path d="M12 3a6 6 0 0 0-6 6v3.5L4.5 15a.75.75 0 0 0 .53 1.28h13.94A.75.75 0 0 0 19.5 15L18 12.5V9a6 6 0 0 0-6-6Zm0 18a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 21Z" stroke="currentColor" strokeWidth="1.4" />
-        </svg>
+        <div className="relative">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3a6 6 0 0 0-6 6v3.5L4.5 15a.75.75 0 0 0 .53 1.28h13.94A.75.75 0 0 0 19.5 15L18 12.5V9a6 6 0 0 0-6-6Zm0 18a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 21Z" stroke="currentColor" strokeWidth="1.4" />
+          </svg>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </div>
       ),
     },
     {

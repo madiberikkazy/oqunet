@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { useLang } from "./contexts/LanguageContext.jsx";
+import NotificationToast from "./components/NotificationToast.jsx";
 
 import Register from "./pages/auth/Register.jsx";
 import Login from "./pages/auth/Login.jsx";
@@ -41,40 +42,43 @@ function RoleRoute({ userElement, adminElement }) {
 export default function App() {
   useLang(); // re-render entire tree whenever language changes so all t.key proxies update
   return (
-    <Routes>
-      <Route path="/auth/register" element={<Register />} />
-      <Route path="/auth/login" element={<Login />} />
+    <>
+      <NotificationToast />
+      <Routes>
+        <Route path="/auth/register" element={<Register />} />
+        <Route path="/auth/login" element={<Login />} />
 
-      <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<RoleRoute userElement={<Home />} adminElement={<AdminHome />} />} />
-        <Route path="/books" element={<RoleRoute userElement={<Books />} adminElement={<AdminBooks />} />} />
-        <Route path="/books/:id" element={<BookDetail />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<RoleRoute userElement={<Home />} adminElement={<AdminHome />} />} />
+          <Route path="/books" element={<RoleRoute userElement={<Books />} adminElement={<AdminBooks />} />} />
+          <Route path="/books/:id" element={<BookDetail />} />
 
-        {/* Pickup flow — replaces the old /request route */}
-        <Route path="/books/:id/pickup" element={<PickupBook />} />
+          {/* Pickup flow — replaces the old /request route */}
+          <Route path="/books/:id/pickup" element={<PickupBook />} />
 
-        <Route path="/books/add" element={<AddBook />} />
-        <Route path="/books/:id/edit" element={<EditBook />} />
+          <Route path="/books/add" element={<AddBook />} />
+          <Route path="/books/:id/edit" element={<EditBook />} />
 
-        <Route path="/notifications" element={<RoleRoute userElement={<Notification />} adminElement={<AdminNotification />} />} />
-        {/* Notification detail — shared between user and admin */}
-        <Route path="/notifications/:id" element={<NotificationDetail />} />
+          <Route path="/notifications" element={<RoleRoute userElement={<Notification />} adminElement={<AdminNotification />} />} />
+          {/* Notification detail — shared between user and admin */}
+          <Route path="/notifications/:id" element={<NotificationDetail />} />
 
-        <Route path="/admin/members" element={<AdminMembers />} />
-        <Route path="/profile" element={<RoleRoute userElement={<Profile />} adminElement={<AdminProfile />} />} />
-        <Route path="/profile/owned"     element={<OwnedBooks />} />
-        <Route path="/profile/reading"   element={<ReadingNow />} />
-        <Route path="/profile/completed" element={<CompletedBooks />} />
-        <Route path="/profile/saved"     element={<SavedBooks />} />
-        <Route path="/settings" element={<Settings />} />
+          <Route path="/admin/members" element={<AdminMembers />} />
+          <Route path="/profile" element={<RoleRoute userElement={<Profile />} adminElement={<AdminProfile />} />} />
+          <Route path="/profile/owned"     element={<OwnedBooks />} />
+          <Route path="/profile/reading"   element={<ReadingNow />} />
+          <Route path="/profile/completed" element={<CompletedBooks />} />
+          <Route path="/profile/saved"     element={<SavedBooks />} />
+          <Route path="/settings" element={<Settings />} />
 
-        <Route path="/community/create" element={<CreateCommunity />} />
-        <Route path="/community/join" element={<JoinCommunity />} />
-        <Route path="/community/:id" element={<CommunityProfile />} />
-        <Route path="/users/:id" element={<UserProfile />} />
-      </Route>
+          <Route path="/community/create" element={<CreateCommunity />} />
+          <Route path="/community/join" element={<JoinCommunity />} />
+          <Route path="/community/:id" element={<CommunityProfile />} />
+          <Route path="/users/:id" element={<UserProfile />} />
+        </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

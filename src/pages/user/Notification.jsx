@@ -4,30 +4,24 @@ import SearchBar from "../../components/SearchBar.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import NotificationItem from "../../components/NotificationItem.jsx";
 import {
-  listNotifications,
   deleteNotification,
   markNotificationRead,
 } from "../../firebase/firestore.js";
-import { useAuth } from "../../contexts/AuthContext.jsx";
+import { useNotifications } from "../../contexts/NotificationContext.jsx";
 import { t } from "../../utils/i18n.js";
 
 export default function Notification() {
-  const { user } = useAuth();
-  const [items, setItems] = useState([]);
+  const { notifications, loadNotifications, markAllAsRead } = useNotifications();
   const [search, setSearch] = useState("");
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState(new Set());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    listNotifications(user.id)
-      .then(setItems)
-      .finally(() => setLoading(false));
-  }, [user?.id]);
+    loadNotifications();
+  }, [loadNotifications]);
 
-  const filtered = items.filter(
+  const filtered = notifications.filter(
     (n) =>
       !search ||
       n.title?.toLowerCase().includes(search.toLowerCase()) ||
@@ -42,17 +36,25 @@ export default function Notification() {
   }
 
   async function bulkDelete() {
-    await Promise.all([...selected].map((id) => deleteNotification(id)));
-    setItems((prev) => prev.filter((n) => !selected.has(n.id)));
+    setLoading(true);
+    try {
+      await Promise.all([...selected].map((id) => deleteNotification(id)));
+      await loadNotifications();
+    } finally {
+      setLoading(false);
+    }
     setSelected(new Set());
     setSelectMode(false);
   }
 
   async function bulkMarkRead() {
-    await Promise.all([...selected].map((id) => markNotificationRead(id)));
-    setItems((prev) =>
-      prev.map((n) => (selected.has(n.id) ? { ...n, read: true } : n))
-    );
+    setLoading(true);
+    try {
+      await Promise.all([...selected].map((id) => markNotificationRead(id)));
+      await loadNotifications();
+    } finally {
+      setLoading(false);
+    }
     setSelected(new Set());
     setSelectMode(false);
   }
@@ -71,13 +73,13 @@ export default function Notification() {
               </svg>
             </button>
             <span className="flex-1 font-medium">{selected.size} выбрано</span>
-            <button onClick={bulkMarkRead} className="icon-btn" aria-label="Mark read">
+            <button onClick={bulkMarkRead} disabled={loading} className="icon-btn" aria-label="Mark read">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M3 7l9 7 9-7M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7"
                   stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <button onClick={bulkDelete} className="icon-btn" aria-label="Delete">
+            <button onClick={bulkDelete} disabled={loading} className="icon-btn" aria-label="Delete">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M4 7h16M9 7V4h6v3m-7 0v13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7"
                   stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -91,7 +93,7 @@ export default function Notification() {
         )}
       </div>
 
-      {!selectMode && items.length > 0 ? (
+      {!selectMode && notifications.length > 0 ? (
         <div className="px-4 mt-1 flex justify-end">
           <button onClick={() => setSelectMode(true)} className="text-[13px] text-ink-500">
             Выбрать
