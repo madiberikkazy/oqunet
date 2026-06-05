@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext.jsx";
 import { useLang } from "./contexts/LanguageContext.jsx";
 import NotificationToast from "./components/NotificationToast.jsx";
+import OfflineIndicator from "./components/OfflineIndicator.jsx";
 
 import Register from "./pages/auth/Register.jsx";
 import Login from "./pages/auth/Login.jsx";
@@ -43,6 +44,7 @@ export default function App() {
   useLang(); // re-render entire tree whenever language changes so all t.key proxies update
   return (
     <>
+      <OfflineIndicator />
       <NotificationToast />
       <Routes>
         <Route path="/auth/register" element={<Register />} />
