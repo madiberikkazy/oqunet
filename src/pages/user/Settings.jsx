@@ -8,6 +8,7 @@ import {
 import MobileShell from "../../components/MobileShell.jsx";
 import Avatar from "../../components/Avatar.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
+import PWASettings from "../../components/PWASettings.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { useTheme } from "../../contexts/ThemeContext.jsx";
@@ -527,6 +528,14 @@ export default function Settings() {
             <Divider />
           </>
         )}
+
+        {/* ══ PWA SETTINGS ═══════════════════════════════════════════════════════ */}
+        <section>
+          <h2 className="text-[17px] font-bold mb-4">Приложение</h2>
+          <PWASettings />
+        </section>
+
+        <Divider />
 
         {/* ══ ACCOUNT ════════════════════════════════════════════════════════════ */}
         <section>

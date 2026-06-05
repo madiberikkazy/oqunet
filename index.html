@@ -4,6 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2853AF" />
+    <meta name="description" content="Share books with your community. Borrow, lend, and discover new reading experiences." />
+    <meta name="keywords" content="books, sharing, community, library, reading" />
+    <meta name="author" content="OquNet" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OquNet" />
+    <meta name="apple-mobile-web-app-status-bar" content="black-translucent" />
+    
+    <!-- App Icons -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="apple-touch-icon" href="/logo-192.svg" />
+    <link rel="shortcut icon" type="image/svg+xml" href="/logo.svg" />
+    
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Open Graph Tags -->
+    <meta property="og:title" content="OquNet — Book Sharing Community" />
+    <meta property="og:description" content="Share books with your community. Borrow, lend, and discover new reading experiences." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://oqunet.app" />
+    
     <title>OquNet — Book Sharing Community</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,5 +44,47 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(registration) {
+              console.log('Service Worker registered successfully:', registration);
+              
+              // Check for updates periodically
+              setInterval(function() {
+                registration.update().catch(function(err) {
+                  console.warn('Failed to check for service worker updates:', err);
+                });
+              }, 60000); // Check every 60 seconds
+            })
+            .catch(function(err) {
+              console.warn('Service Worker registration failed:', err);
+            });
+          
+          // Handle service worker controller change (updated)
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            console.log('Service Worker updated, page will reload');
+            // You can show a notification to the user here
+          });
+        });
+      }
+      
+      // Detect if app is installed
+      window.addEventListener('beforeinstallprompt', function(event) {
+        event.preventDefault();
+        window.deferredInstallPrompt = event;
+        console.log('App can be installed');
+      });
+      
+      window.addEventListener('appinstalled', function() {
+        console.log('App was installed');
+        if (window.deferredInstallPrompt) {
+          window.deferredInstallPrompt = null;
+        }
+      });
+    </script>
   </body>
 </html>
