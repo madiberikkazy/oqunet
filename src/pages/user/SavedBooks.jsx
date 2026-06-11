@@ -4,8 +4,11 @@ import MobileShell from "../../components/MobileShell.jsx";
 import BookStatusBadge from "../../components/BookStatusBadge.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
-import { getBook, updateUser } from "../../firebase/firestore.js";
+import { getBooksByIds, updateUser } from "../../firebase/firestore.js";
+import { cacheService } from "../../utils/cacheService.js";
 import { t } from "../../utils/i18n.js";
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export default function SavedBooks() {
   const { user, refresh } = useAuth();
@@ -15,11 +18,40 @@ export default function SavedBooks() {
 
   useEffect(() => {
     const ids = user?.savedBookIds || [];
-    if (ids.length === 0) { setBooks([]); setLoading(false); return; }
-    Promise.all(ids.map((id) => getBook(id))).then((results) => {
-      setBooks(results.filter(Boolean));
+    if (ids.length === 0) {
+      setBooks([]);
       setLoading(false);
-    });
+      return;
+    }
+
+    const loadBooks = async () => {
+      setLoading(true);
+      try {
+        // Check cache first
+        const cacheKey = `savedBooks:${ids.join(",")}`;
+        const cached = cacheService.get(cacheKey);
+        if (cached) {
+          setBooks(cached);
+          setLoading(false);
+          return;
+        }
+
+        // Batch fetch with concurrency control (5 at a time)
+        const results = await getBooksByIds(ids, 5);
+        const filteredResults = results.filter(Boolean);
+
+        // Cache the results
+        cacheService.set(cacheKey, filteredResults, CACHE_TTL);
+
+        setBooks(filteredResults);
+      } catch (error) {
+        console.error("Failed to load saved books:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBooks();
   }, [user?.savedBookIds]);
 
   async function unsave(bookId, e) {
@@ -27,6 +59,8 @@ export default function SavedBooks() {
     const next = (user.savedBookIds || []).filter((id) => id !== bookId);
     await updateUser(user.id, { savedBookIds: next });
     setBooks((prev) => prev.filter((b) => b.id !== bookId));
+    // Clear cache
+    cacheService.clearPattern("savedBooks:");
     refresh();
   }
 

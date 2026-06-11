@@ -6,7 +6,10 @@ import EmptyState from "../../components/EmptyState.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { listBooks } from "../../firebase/firestore.js";
+import { cacheService } from "../../utils/cacheService.js";
 import { t } from "../../utils/i18n.js";
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export default function OwnedBooks() {
   const { user } = useAuth();
@@ -16,19 +19,45 @@ export default function OwnedBooks() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !community?.id) { setLoading(false); return; }
-    listBooks({ communityId: community.id }).then((rows) => {
-      // "Books you currently have" = books you physically hold right now:
-      // 1. You own it AND it's available (not lent out) → you have it
-      // 2. You're the active borrower (borrowerId === you) → you have it
-      const yours = rows.filter(
-        (b) =>
-          (b.ownerId === user.id && b.status !== "unavailable") ||
-          (b.borrowerId === user.id && b.status === "unavailable")
-      );
-      setBooks(yours);
+    if (!user || !community?.id) {
       setLoading(false);
-    });
+      return;
+    }
+
+    const loadOwnedBooks = async () => {
+      setLoading(true);
+      try {
+        const cacheKey = `ownedBooks:${user.id}:${community.id}`;
+
+        // Check cache first
+        const cached = cacheService.get(cacheKey);
+        if (cached) {
+          setBooks(cached);
+          setLoading(false);
+          return;
+        }
+
+        const result = await listBooks({ communityId: community.id, pageSize: 200 });
+        const allBooks = result.items || result;
+
+        // Filter books user currently has
+        const yours = allBooks.filter(
+          (b) =>
+            (b.ownerId === user.id && b.status !== "unavailable") ||
+            (b.borrowerId === user.id && b.status === "unavailable")
+        );
+
+        // Cache the results
+        cacheService.set(cacheKey, yours, CACHE_TTL);
+        setBooks(yours);
+      } catch (error) {
+        console.error("Failed to load owned books:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadOwnedBooks();
   }, [user?.id, community?.id]);
 
   return (

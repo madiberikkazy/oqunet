@@ -145,11 +145,11 @@ export async function listCommunities() { return getCollection("communities"); }
 
 // ---------- Books ----------
 export async function createBook(payload) { return createOne("books", payload); }
-export async function listBooks({ communityId, search, status, genres, pageSize = 200 } = {}) {
+export async function listBooks({ communityId, search, status, genres, pageSize = 30, cursor = null } = {}) {
   const wheres = [];
   if (communityId) wheres.push(["communityId", "==", communityId]);
   if (status) wheres.push(["status", "==", status]);
-  let rows = await getCollection("books", { where: wheres, pageSize });
+  let rows = await getCollection("books", { where: wheres, pageSize: pageSize + 1, cursor }); // +1 to detect if there are more
   if (search) {
     const s = search.toLowerCase();
     rows = rows.filter((b) => b.name?.toLowerCase().includes(s) || b.author?.toLowerCase().includes(s));
@@ -158,8 +158,53 @@ export async function listBooks({ communityId, search, status, genres, pageSize 
   if (genres && genres.length > 0) {
     rows = rows.filter((b) => genres.includes(b.genre));
   }
-  return rows;
+  
+  // Check if there are more results
+  let hasMore = false;
+  let nextCursor = null;
+  if (rows.length > pageSize) {
+    hasMore = true;
+    rows = rows.slice(0, pageSize);
+    nextCursor = rows[rows.length - 1] || null;
+  }
+  
+  return { items: rows, nextCursor, hasMore };
 }
+
+/**
+ * Batch fetch ratings for multiple books with concurrency control
+ */
+export async function listRatingsForBooks(bookIds, concurrency = 5) {
+  if (!bookIds || bookIds.length === 0) return [];
+  
+  const results = [];
+  for (let i = 0; i < bookIds.length; i += concurrency) {
+    const batch = bookIds.slice(i, i + concurrency);
+    const batchResults = await Promise.all(
+      batch.map((id) => listRatingsForBook(id))
+    );
+    results.push(...batchResults);
+  }
+  
+  // Return map of bookId -> { count, average }
+  const ratingMap = {};
+  bookIds.forEach((bookId) => {
+    ratingMap[bookId] = { count: 0, average: 0 };
+  });
+  
+  results.forEach((ratings, idx) => {
+    const bookId = bookIds[Math.floor(idx / concurrency) * concurrency + (idx % concurrency)];
+    if (ratings && ratings.length > 0) {
+      ratingMap[bookId] = {
+        count: ratings.length,
+        average: ratings.reduce((s, r) => s + (r.value || 0), 0) / ratings.length,
+      };
+    }
+  });
+  
+  return ratingMap;
+}
+
 export async function getBook(id) { return getOne("books", id); }
 export async function updateBook(id, patch) { return updateOne("books", id, patch); }
 export async function deleteBook(id) { return deleteOne("books", id); }
@@ -334,5 +379,24 @@ export async function updateBorrowing(id, patch) { return updateOne("borrowings"
 // ---------- Ratings & reviews ----------
 export async function addRating(payload) { return createOne("ratings", payload); }
 export async function listRatingsForBook(bookId) { return getCollection("ratings", { where: [["bookId", "==", bookId]] }); }
+
+/**
+ * Batch fetch books by IDs with concurrency control
+ */
+export async function getBooksByIds(bookIds, concurrency = 5) {
+  if (!bookIds || bookIds.length === 0) return [];
+  
+  const results = [];
+  for (let i = 0; i < bookIds.length; i += concurrency) {
+    const batch = bookIds.slice(i, i + concurrency);
+    const batchResults = await Promise.all(
+      batch.map((id) => getBook(id))
+    );
+    results.push(...batchResults.filter(Boolean));
+  }
+  
+  return results;
+}
+
 export async function addReview(payload) { return createOne("reviews", payload); }
 export async function listReviewsForBook(bookId) { return getCollection("reviews", { where: [["bookId", "==", bookId]] }); }
