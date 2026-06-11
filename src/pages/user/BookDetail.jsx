@@ -29,36 +29,94 @@ export default function BookDetail() {
   const [expand, setExpand]         = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [pickupRequest, setPickupRequest] = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
 
   useEffect(() => {
     (async () => {
-      const b = await getBook(id);
-      setBook(b);
-      if (b?.ownerId) setOwner(await getUserById(b.ownerId));
-      setRatings(await listRatingsForBook(id));
-      setReviews(await listReviewsForBook(id));
+      try {
+        setLoading(true);
+        setError(null);
+        console.log("BookDetail: Loading book with id:", id);
 
-      // Load who physically has the book:
-      // unavailable → active borrower (current holder)
-      // available   → last person who returned it (most recent completed borrowing)
-      if (b?.status === "unavailable") {
-        const borrowing = await getActiveBorrowingByBook(id);
-        if (borrowing?.borrowerId) {
-          setCurrentHolder(await getUserById(borrowing.borrowerId));
+        const b = await getBook(id);
+        console.log("BookDetail: Got book:", b);
+        
+        if (!b) {
+          console.log("BookDetail: Book not found");
+          setError("Кітап табылмады");
+          setLoading(false);
+          return;
         }
-      } else {
-        const last = await getLastCompletedBorrowingByBook(id);
-        if (last?.borrowerId) {
-          setCurrentHolder(await getUserById(last.borrowerId));
+        
+        setBook(b);
+        
+        if (b?.ownerId) {
+          try {
+            const ownerData = await getUserById(b.ownerId);
+            if (ownerData) setOwner(ownerData);
+          } catch (err) {
+            console.error("Error loading owner:", err);
+          }
         }
-      }
+        
+        try {
+          const ratingsData = await listRatingsForBook(id);
+          setRatings(ratingsData || []);
+        } catch (err) {
+          console.error("Error loading ratings:", err);
+          setRatings([]);
+        }
+        
+        try {
+          const reviewsData = await listReviewsForBook(id);
+          setReviews(reviewsData || []);
+        } catch (err) {
+          console.error("Error loading reviews:", err);
+          setReviews([]);
+        }
 
-      // Load any existing pending pickup request for this user+book.
-      // We do NOT auto-redirect — the user stays on BookDetail and sees
-      // a "Continue" button. This prevents the infinite redirect loop.
-      if (user?.id) {
-        const existing = await getPickupRequest(id, user.id);
-        setPickupRequest(existing || null);
+        // Load who physically has the book:
+        // unavailable → active borrower (current holder)
+        // available   → last person who returned it (most recent completed borrowing)
+        if (b?.status === "unavailable") {
+          try {
+            const borrowing = await getActiveBorrowingByBook(id);
+            if (borrowing?.borrowerId) {
+              const holderData = await getUserById(borrowing.borrowerId);
+              if (holderData) setCurrentHolder(holderData);
+            }
+          } catch (err) {
+            console.error("Error loading current holder:", err);
+          }
+        } else {
+          try {
+            const last = await getLastCompletedBorrowingByBook(id);
+            if (last?.borrowerId) {
+              const holderData = await getUserById(last.borrowerId);
+              if (holderData) setCurrentHolder(holderData);
+            }
+          } catch (err) {
+            console.error("Error loading last holder:", err);
+          }
+        }
+
+        // Load any existing pending pickup request for this user+book.
+        if (user?.id) {
+          try {
+            const existing = await getPickupRequest(id, user.id);
+            setPickupRequest(existing || null);
+          } catch (err) {
+            console.error("Error loading pickup request:", err);
+          }
+        }
+
+        console.log("BookDetail: Finished loading all data");
+        setLoading(false);
+      } catch (err) {
+        console.error("Error loading book detail:", err);
+        setError("Қателік: кітапты жүктеу мүмкін болмады");
+        setLoading(false);
       }
     })();
   }, [id, user?.id]);
@@ -145,10 +203,26 @@ export default function BookDetail() {
     }
   }
 
-  if (!book) {
+  if (loading) {
     return (
       <MobileShell>
-        <p className="px-6 py-12 text-ink-500 text-center">Загрузка...</p>
+        <p className="px-6 py-12 text-ink-500 text-center">Жүктелуде...</p>
+      </MobileShell>
+    );
+  }
+
+  if (error || !book) {
+    return (
+      <MobileShell>
+        <div className="px-4 py-12 text-center">
+          <p className="text-ink-500 mb-4">{error || "Кітап табылмады"}</p>
+          <button
+            onClick={() => navigate(-1)}
+            className="btn-primary"
+          >
+            Артқа қайту
+          </button>
+        </div>
       </MobileShell>
     );
   }
