@@ -99,16 +99,26 @@ export default function Books() {
 
         // Batch fetch ratings for all books
         if (itemsWithRatings.length > 0) {
-          const ratingMap = await listRatingsForBooks(
-            itemsWithRatings.map((b) => b.id),
-            5 // concurrency
-          );
+          try {
+            const ratingMap = await listRatingsForBooks(
+              itemsWithRatings.map((b) => b.id),
+              5 // concurrency
+            );
 
-          itemsWithRatings = itemsWithRatings.map((b) => ({
-            ...b,
-            rating: ratingMap[b.id]?.average || 0,
-            ratingCount: ratingMap[b.id]?.count || 0,
-          }));
+            itemsWithRatings = itemsWithRatings.map((b) => ({
+              ...b,
+              rating: ratingMap[b.id]?.average || 0,
+              ratingCount: ratingMap[b.id]?.count || 0,
+            }));
+          } catch (ratingError) {
+            console.error("Error fetching ratings:", ratingError);
+            // Continue without ratings if they fail to load
+            itemsWithRatings = itemsWithRatings.map((b) => ({
+              ...b,
+              rating: 0,
+              ratingCount: 0,
+            }));
+          }
         }
 
         // Cache the result
@@ -119,6 +129,7 @@ export default function Books() {
         setHasMore(result.hasMore || false);
       } catch (error) {
         console.error("Failed to load books:", error);
+        setBooks([]);
       } finally {
         setLoadingInitial(false);
       }
@@ -147,16 +158,26 @@ export default function Books() {
 
       // Batch fetch ratings for new items
       if (newItems.length > 0) {
-        const ratingMap = await listRatingsForBooks(
-          newItems.map((b) => b.id),
-          5 // concurrency
-        );
+        try {
+          const ratingMap = await listRatingsForBooks(
+            newItems.map((b) => b.id),
+            5 // concurrency
+          );
 
-        newItems = newItems.map((b) => ({
-          ...b,
-          rating: ratingMap[b.id]?.average || 0,
-          ratingCount: ratingMap[b.id]?.count || 0,
-        }));
+          newItems = newItems.map((b) => ({
+            ...b,
+            rating: ratingMap[b.id]?.average || 0,
+            ratingCount: ratingMap[b.id]?.count || 0,
+          }));
+        } catch (ratingError) {
+          console.error("Error fetching ratings for load more:", ratingError);
+          // Continue without ratings
+          newItems = newItems.map((b) => ({
+            ...b,
+            rating: 0,
+            ratingCount: 0,
+          }));
+        }
       }
 
       setBooks((prev) => mergeUniqueArrays(prev, newItems));

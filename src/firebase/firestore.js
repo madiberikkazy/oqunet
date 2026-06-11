@@ -175,32 +175,34 @@ export async function listBooks({ communityId, search, status, genres, pageSize 
  * Batch fetch ratings for multiple books with concurrency control
  */
 export async function listRatingsForBooks(bookIds, concurrency = 5) {
-  if (!bookIds || bookIds.length === 0) return [];
+  if (!bookIds || bookIds.length === 0) return {};
   
-  const results = [];
+  // Return map of bookId -> { count, average }
+  const ratingMap = {};
+  
+  // Initialize all books with empty ratings
+  bookIds.forEach((bookId) => {
+    ratingMap[bookId] = { count: 0, average: 0 };
+  });
+
+  // Fetch ratings in batches
   for (let i = 0; i < bookIds.length; i += concurrency) {
     const batch = bookIds.slice(i, i + concurrency);
     const batchResults = await Promise.all(
       batch.map((id) => listRatingsForBook(id))
     );
-    results.push(...batchResults);
+    
+    // Map results back to book IDs
+    batchResults.forEach((ratings, idx) => {
+      const bookId = batch[idx];
+      if (ratings && ratings.length > 0) {
+        ratingMap[bookId] = {
+          count: ratings.length,
+          average: ratings.reduce((s, r) => s + (r.value || 0), 0) / ratings.length,
+        };
+      }
+    });
   }
-  
-  // Return map of bookId -> { count, average }
-  const ratingMap = {};
-  bookIds.forEach((bookId) => {
-    ratingMap[bookId] = { count: 0, average: 0 };
-  });
-  
-  results.forEach((ratings, idx) => {
-    const bookId = bookIds[Math.floor(idx / concurrency) * concurrency + (idx % concurrency)];
-    if (ratings && ratings.length > 0) {
-      ratingMap[bookId] = {
-        count: ratings.length,
-        average: ratings.reduce((s, r) => s + (r.value || 0), 0) / ratings.length,
-      };
-    }
-  });
   
   return ratingMap;
 }
