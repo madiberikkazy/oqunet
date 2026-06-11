@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import MobileShell from "../../components/MobileShell.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
 import BookCard from "../../components/BookCard.jsx";
@@ -7,8 +7,11 @@ import Modal from "../../components/Modal.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useLang } from "../../contexts/LanguageContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
-import { listBooks, updateUser, listRatingsForBook } from "../../firebase/firestore.js";
+import { listBooks, updateUser, listRatingsForBooks } from "../../firebase/firestore.js";
 import { t, GENRES, genreLabel } from "../../utils/i18n.js";
+import { debounce, mergeUniqueArrays } from "../../utils/performanceHelpers.js";
+import { cacheService } from "../../utils/cacheService.js";
+import { useInfiniteScroll } from "../../utils/useIntersectionHooks.js";
 
 const STATUS_OPTIONS = [
   { v: null,          labelKey: "allBooks"          },
@@ -17,22 +20,178 @@ const STATUS_OPTIONS = [
   { v: "unavailable", labelKey: "statusUnavailable" },
 ];
 
+const PAGE_SIZE = 25; // Load 25 items per page
+const CACHE_TTL = 3 * 60 * 1000; // Cache for 3 minutes
+
 export default function Books() {
   const { user, refresh } = useAuth();
   const { community } = useCommunity();
-  useLang(); // re-render on language change so genre labels update
+  useLang();
 
-  const [books, setBooks]         = useState([]);
-  const [search, setSearch]       = useState("");
-  const [status, setStatus]       = useState(null);       // committed
-  const [genres, setGenres]       = useState([]);          // committed — array of genre values
+  const [books, setBooks] = useState([]);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(null);
+  const [genres, setGenres] = useState([]);
   const [filterOpen, setFilterOpen] = useState(false);
 
-  // draft state — edited inside the modal, applied on "Применить"
+  // Pagination state
+  const [cursor, setCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Draft state for filters
   const [draftStatus, setDraftStatus] = useState(null);
   const [draftGenres, setDraftGenres] = useState([]);
 
   const isFilterActive = status !== null || genres.length > 0;
+
+  // Generate cache key for current filters
+  const getCacheKey = useCallback(() => {
+    return `books:${community?.id || ""}:${search}:${status || ""}:${genres.join(",")}`;
+  }, [community?.id, search, status, genres]);
+
+  // Debounced search handler
+  const debouncedSearch = useMemo(
+    () => debounce((searchTerm) => {
+      setBooks([]);
+      setCursor(null);
+      setHasMore(true);
+      // Clear cache for this search
+      cacheService.clearPattern(`books:${community?.id || ""}`);
+    }, 300),
+    [community?.id]
+  );
+
+  // Initial load and on filter change
+  useEffect(() => {
+    if (!community?.id) {
+      setBooks([]);
+      setLoadingInitial(false);
+      return;
+    }
+
+    const loadInitial = async () => {
+      setLoadingInitial(true);
+      setCursor(null);
+      setBooks([]);
+      setHasMore(true);
+
+      const cacheKey = getCacheKey();
+      let cachedBooks = cacheService.get(cacheKey);
+
+      if (cachedBooks) {
+        setBooks(cachedBooks);
+        setLoadingInitial(false);
+        return;
+      }
+
+      try {
+        const result = await listBooks({
+          communityId: community.id,
+          search,
+          status,
+          genres,
+          pageSize: PAGE_SIZE,
+        });
+
+        let itemsWithRatings = result.items || [];
+
+        // Batch fetch ratings for all books
+        if (itemsWithRatings.length > 0) {
+          const ratingMap = await listRatingsForBooks(
+            itemsWithRatings.map((b) => b.id),
+            5 // concurrency
+          );
+
+          itemsWithRatings = itemsWithRatings.map((b) => ({
+            ...b,
+            rating: ratingMap[b.id]?.average || 0,
+            ratingCount: ratingMap[b.id]?.count || 0,
+          }));
+        }
+
+        // Cache the result
+        cacheService.set(cacheKey, itemsWithRatings, CACHE_TTL);
+
+        setBooks(itemsWithRatings);
+        setCursor(result.nextCursor || null);
+        setHasMore(result.hasMore || false);
+      } catch (error) {
+        console.error("Failed to load books:", error);
+      } finally {
+        setLoadingInitial(false);
+      }
+    };
+
+    loadInitial();
+  }, [community?.id, search, status, genres, getCacheKey]);
+
+  // Load more handler for infinite scroll
+  const loadMore = useCallback(async () => {
+    if (!community?.id || loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+
+    try {
+      const result = await listBooks({
+        communityId: community.id,
+        search,
+        status,
+        genres,
+        pageSize: PAGE_SIZE,
+        cursor,
+      });
+
+      let newItems = result.items || [];
+
+      // Batch fetch ratings for new items
+      if (newItems.length > 0) {
+        const ratingMap = await listRatingsForBooks(
+          newItems.map((b) => b.id),
+          5 // concurrency
+        );
+
+        newItems = newItems.map((b) => ({
+          ...b,
+          rating: ratingMap[b.id]?.average || 0,
+          ratingCount: ratingMap[b.id]?.count || 0,
+        }));
+      }
+
+      setBooks((prev) => mergeUniqueArrays(prev, newItems));
+      setCursor(result.nextCursor || null);
+      setHasMore(result.hasMore || false);
+
+      // Update cache
+      const cacheKey = getCacheKey();
+      const cachedBooks = cacheService.get(cacheKey) || [];
+      const updatedBooks = mergeUniqueArrays(cachedBooks, newItems);
+      cacheService.set(cacheKey, updatedBooks, CACHE_TTL);
+    } catch (error) {
+      console.error("Failed to load more books:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [community?.id, search, status, genres, cursor, hasMore, loadingMore, getCacheKey]);
+
+  // Infinite scroll sentinel
+  const { sentinelRef } = useInfiniteScroll({
+    onLoadMore: loadMore,
+    threshold: 300,
+  });
+
+  const savedSet = useMemo(() => new Set(user?.savedBookIds || []), [user?.savedBookIds]);
+
+  async function onSaveToggle(book) {
+    const next = new Set(savedSet);
+    if (next.has(book.id)) next.delete(book.id); else next.add(book.id);
+    await updateUser(user.id, { savedBookIds: [...next] });
+    refresh();
+  }
+
+  function removeGenre(v) { setGenres((prev) => prev.filter((g) => g !== v)); }
+  function removeStatus() { setStatus(null); }
 
   function openFilter() {
     setDraftStatus(status);
@@ -57,31 +216,10 @@ export default function Books() {
     );
   }
 
-  // Fetch books whenever committed filters or search change
-  useEffect(() => {
-    if (!community?.id) { setBooks([]); return; }
-    listBooks({ communityId: community.id, search, status, genres }).then(async (rows) => {
-      const withRatings = await Promise.all(rows.map(async (b) => {
-        const rs = await listRatingsForBook(b.id);
-        const ratingCount = rs.length;
-        const rating = ratingCount ? rs.reduce((s, r) => s + (r.value || 0), 0) / ratingCount : 0;
-        return { ...b, rating, ratingCount };
-      }));
-      setBooks(withRatings);
-    });
-  }, [community?.id, search, status, genres]);
-
-  const savedSet = useMemo(() => new Set(user?.savedBookIds || []), [user?.savedBookIds]);
-
-  async function onSaveToggle(book) {
-    const next = new Set(savedSet);
-    if (next.has(book.id)) next.delete(book.id); else next.add(book.id);
-    await updateUser(user.id, { savedBookIds: [...next] });
-    refresh();
+  function handleSearchChange(newSearch) {
+    setSearch(newSearch);
+    debouncedSearch(newSearch);
   }
-
-  function removeGenre(v) { setGenres((prev) => prev.filter((g) => g !== v)); }
-  function removeStatus() { setStatus(null); }
 
   if (!community) {
     return (
@@ -96,7 +234,7 @@ export default function Books() {
       <div className="pb-2">
         <SearchBar
           value={search}
-          onChange={setSearch}
+          onChange={handleSearchChange}
           onFilterClick={openFilter}
           filterActive={isFilterActive}
         />
@@ -117,13 +255,28 @@ export default function Books() {
         </div>
       ) : null}
 
-      {books.length === 0 ? (
+      {loadingInitial ? (
+        <EmptyState title="Загрузка..." subtitle="" />
+      ) : books.length === 0 ? (
         <EmptyState title="Книг пока нет" subtitle="Когда участники начнут делиться книгами, они появятся здесь." />
       ) : (
         <ul className="mt-2">
           {books.map((b) => (
-            <li key={b.id}><BookCard book={b} saved={savedSet.has(b.id)} onSaveToggle={onSaveToggle} /></li>
+            <li key={b.id}>
+              <BookCard book={b} saved={savedSet.has(b.id)} onSaveToggle={onSaveToggle} />
+            </li>
           ))}
+
+          {/* Infinite scroll sentinel */}
+          {hasMore && (
+            <li ref={sentinelRef} className="py-4 text-center">
+              {loadingMore ? (
+                <p className="text-ink-400 text-[14px]">{t.loading || "Загрузка..."}</p>
+              ) : (
+                <p className="text-ink-400 text-[13px]">Прокрутите для загрузки больше</p>
+              )}
+            </li>
+          )}
         </ul>
       )}
 

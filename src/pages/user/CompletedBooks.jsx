@@ -4,7 +4,10 @@ import MobileShell from "../../components/MobileShell.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { listBorrowingsForUser } from "../../firebase/firestore.js";
+import { cacheService } from "../../utils/cacheService.js";
 import { t } from "../../utils/i18n.js";
+
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes (completed books change less frequently)
 
 function StarRow({ rating }) {
   if (!rating) return null;
@@ -32,12 +35,38 @@ export default function CompletedBooks() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    listBorrowingsForUser(user.id, "completed").then((rows) => {
-      rows.sort((a, b) => (b.returnDate ?? b.createdAt ?? 0) - (a.returnDate ?? a.createdAt ?? 0));
-      setItems(rows);
+    if (!user) {
       setLoading(false);
-    });
+      return;
+    }
+
+    const loadCompletedBooks = async () => {
+      setLoading(true);
+      try {
+        const cacheKey = `completedBooks:${user.id}`;
+
+        // Check cache first
+        const cached = cacheService.get(cacheKey);
+        if (cached) {
+          setItems(cached);
+          setLoading(false);
+          return;
+        }
+
+        const rows = await listBorrowingsForUser(user.id, "completed");
+        rows.sort((a, b) => (b.returnDate ?? b.createdAt ?? 0) - (a.returnDate ?? a.createdAt ?? 0));
+
+        // Cache the results
+        cacheService.set(cacheKey, rows, CACHE_TTL);
+        setItems(rows);
+      } catch (error) {
+        console.error("Failed to load completed books:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCompletedBooks();
   }, [user?.id]);
 
   return (

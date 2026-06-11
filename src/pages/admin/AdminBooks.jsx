@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
 import Fab from "../../components/Fab.jsx";
 import { listBooks, deleteBook } from "../../firebase/firestore.js";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
+import { debounce } from "../../utils/performanceHelpers.js";
+import { cacheService } from "../../utils/cacheService.js";
 
 const FALLBACK =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 90'><rect width='60' height='90' fill='#dde5ee'/></svg>`);
+
+const CACHE_TTL = 3 * 60 * 1000; // 3 minutes
 
 export default function AdminBooks() {
   const { community } = useCommunity();
@@ -16,6 +20,7 @@ export default function AdminBooks() {
   const [books, setBooks] = useState([]);
   const [search, setSearch] = useState("");
   const [menuFor, setMenuFor] = useState(null);
+  const [loading, setLoading] = useState(false);
   const menuRef = useRef(null);
 
   // Close menu when clicking outside
@@ -27,16 +32,49 @@ export default function AdminBooks() {
     return () => document.removeEventListener("mousedown", onOutside);
   }, [menuFor]);
 
-  async function load() {
+  // Load books with caching
+  const load = useMemo(() => debounce(async () => {
     if (!community?.id) return;
-    setBooks(await listBooks({ communityId: community.id, search }));
-  }
-  useEffect(() => { load(); }, [community?.id, search]);
+
+    setLoading(true);
+    try {
+      const cacheKey = `adminBooks:${community.id}:${search}`;
+
+      // Check cache first
+      const cached = cacheService.get(cacheKey);
+      if (cached) {
+        setBooks(cached);
+        setLoading(false);
+        return;
+      }
+
+      const result = await listBooks({
+        communityId: community.id,
+        search,
+        pageSize: 100, // Load more for admin view
+      });
+
+      const items = result.items || result;
+      // Cache the results
+      cacheService.set(cacheKey, items, CACHE_TTL);
+      setBooks(items);
+    } catch (error) {
+      console.error("Failed to load books:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, 300), [community?.id]);
+
+  useEffect(() => {
+    load();
+  }, [community?.id, search, load]);
 
   async function onDelete(id) {
     if (!confirm("Удалить эту книгу?")) return;
     await deleteBook(id);
     setMenuFor(null);
+    // Clear cache and reload
+    cacheService.clearPattern(`adminBooks:${community.id}`);
     load();
   }
 
@@ -47,7 +85,9 @@ export default function AdminBooks() {
   return (
     <MobileShell>
       <SearchBar value={search} onChange={setSearch} />
-      {books.length === 0 ? (
+      {loading && books.length === 0 ? (
+        <p className="text-ink-400 px-6 py-12 text-center">{t?.loading || "Загрузка..."}</p>
+      ) : books.length === 0 ? (
         <p className="text-ink-500 px-6 py-12 text-center">Книг пока нет.</p>
       ) : (
         <ul className="mt-2">
