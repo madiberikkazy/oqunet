@@ -24,15 +24,20 @@ export function AuthProvider({ children }) {
     let unsubscribe = () => {};
     if (isFirebaseConfigured) {
       unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-        if (fbUser) {
-          const profile = await getUserById(fbUser.uid);
-          setUser(profile);
-        } else {
-          setUser(null);
-        }
-        setViewRole(null); // reset view on every auth change
-        setLoading(false);
-      });
+  try {
+    if (fbUser) {
+      const profile = await getUserById(fbUser.uid);
+      setUser(profile);
+    } else {
+      setUser(null);
+    }
+  } catch (err) {
+    console.error("Auth state load failed:", err);
+    setUser(null);
+  } finally {
+    setLoading(false);
+  }
+});
     } else {
       const session = getMockSession();
       if (session?.uid) {
