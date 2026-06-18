@@ -8,21 +8,18 @@ import { ThemeProvider } from "./contexts/ThemeContext.jsx";
 import { LanguageProvider } from "./contexts/LanguageContext.jsx";
 import { NotificationProvider } from "./contexts/NotificationContext.jsx";
 import "./index.css";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <LanguageProvider>
-        <BrowserRouter>
-          <AuthProvider>
-            <NotificationProvider>
-              <CommunityProvider>
-                <App />
-              </CommunityProvider>
-            </NotificationProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </LanguageProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <CommunityProvider>
+            <App />
+          </CommunityProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );
