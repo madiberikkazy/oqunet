@@ -1,27 +1,57 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
+import Stepper from "../../components/Stepper.jsx";
 import { registerWithEmail, signInWithGoogle } from "../../firebase/auth.js";
 import { uploadImage } from "../../firebase/storage.js";
+import { getUserByNickname } from "../../firebase/firestore.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { t } from "../../utils/i18n.js";
 
 export default function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     email: "",
+    password: "",
+    confirmPassword: "",
     nickname: "",
     firstName: "",
     lastName: "",
-    password: "",
-    confirmPassword: "",
+    phone: "",
     notificationsEnabled: true,
   });
   const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+
+  // Live nickname availability
+  const [nickStatus, setNickStatus] = useState(null); // null | "checking" | "available" | "taken"
+  const nickTimer = useRef(null);
+
+  const photoInputRef = useRef(null);
+
+  function update(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+
+  // Debounced nickname check
+  useEffect(() => {
+    const nick = form.nickname.trim();
+    if (!nick || nick.length < 2) { setNickStatus(null); return; }
+    setNickStatus("checking");
+    clearTimeout(nickTimer.current);
+    nickTimer.current = setTimeout(async () => {
+      try {
+        const existing = await getUserByNickname(nick);
+        setNickStatus(existing ? "taken" : "available");
+      } catch {
+        setNickStatus(null);
+      }
+    }, 400);
+    return () => clearTimeout(nickTimer.current);
+  }, [form.nickname]);
 
   async function onGoogle() {
     setError("");
@@ -37,27 +67,46 @@ export default function Register() {
     }
   }
 
-  function update(k, v) { setForm((f) => ({ ...f, [k]: v })); }
-
-  function validate() {
-    if (!/^\S+@\S+\.\S+$/.test(form.email)) return "Введите корректный email";
-    if (!form.nickname.trim()) return "Введите никнейм";
-    if (!form.firstName.trim() || !form.lastName.trim()) return "Введите имя и фамилию";
-    if (form.password.length < 6) return "Пароль должен содержать минимум 6 символов";
-    if (form.password !== form.confirmPassword) return "Пароли не совпадают";
-    return "";
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    e.target.value = "";
   }
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    const v = validate();
-    if (v) { setError(v); return; }
+  function removePhoto() {
+    setPhotoFile(null);
+    if (photoPreview) { URL.revokeObjectURL(photoPreview); setPhotoPreview(null); }
+  }
+
+  async function next() {
     setError("");
+
+    if (step === 1) {
+      if (!/^\S+@\S+\.\S+$/.test(form.email)) { setError("Корректный email жазыңыз"); return; }
+      if (form.password.length < 6) { setError("Құпия сөз кемінде 6 таңбадан тұруы тиіс"); return; }
+      if (form.password !== form.confirmPassword) { setError("Құпия сөздер сәйкес келмейді"); return; }
+    }
+
+    if (step === 2) {
+      if (!form.nickname.trim()) { setError("Никнейм жазыңыз"); return; }
+      if (nickStatus === "taken") { setError("Бұл никнейм бос емес"); return; }
+      if (nickStatus === "checking") { setError("Никнейм тексерілуде, күте тұрыңыз…"); return; }
+    }
+
+    if (step < 3) { setStep(step + 1); return; }
+
+    // Step 3 — submit
+    await submit();
+  }
+
+  async function submit() {
     setSubmitting(true);
+    setError("");
     try {
       let photoURL = "";
       if (photoFile) {
-        // Upload after we know the uid — but storage.uploadImage can use a path now
         photoURL = await uploadImage(photoFile, `avatars/${form.email}_${Date.now()}`);
       }
       const profile = await registerWithEmail({
@@ -66,6 +115,7 @@ export default function Register() {
         nickname: form.nickname,
         firstName: form.firstName,
         lastName: form.lastName,
+        phone: form.phone,
         notificationsEnabled: form.notificationsEnabled,
         photoURL,
       });
@@ -80,122 +130,255 @@ export default function Register() {
 
   return (
     <MobileShell withNav={false}>
-      <div className="px-6 pt-6 flex flex-col items-center">
-        <div className="w-14 h-14 rounded-2xl bg-brand-50 text-brand-500 flex items-center justify-center mb-3">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <path d="M4 6.5C4 5.67 4.67 5 5.5 5h13c.83 0 1.5.67 1.5 1.5v.5H4v-.5Zm0 3.5h16v1H4v-1Zm0 3h16V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18v-5Z" stroke="currentColor" strokeWidth="1.6" />
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4">
+        <button
+          onClick={() => (step > 1 ? setStep(step - 1) : navigate(-1))}
+          className="icon-btn"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
+        </button>
+        <div className="flex-1">
+          <Stepper step={step} total={3} title={t.signUp} />
         </div>
-        <h1 className="text-2xl font-bold">{t.signUp}</h1>
-        <p className="text-[13px] text-ink-500">Создайте аккаунт OquNet</p>
       </div>
 
-      <form onSubmit={onSubmit} className="px-6 pt-5 space-y-3">
-        <label className="block">
-          <span className="text-[13px] text-ink-500 mb-1 block">{t.email}</span>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => update("email", e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            className="input"
-          />
-        </label>
+      <div className="px-6 pt-3 pb-28 space-y-3">
+        {/* ── Step 1: Email & Password ── */}
+        {step === 1 && (
+          <>
+            <h2 className="text-xl font-bold mb-1">Email & құпия сөз</h2>
 
-        <label className="block">
-          <span className="text-[13px] text-ink-500 mb-1 block">{t.nickname}</span>
-          <input
-            value={form.nickname}
-            onChange={(e) => update("nickname", e.target.value.replace(/\s/g, "").toLowerCase())}
-            placeholder="myhandle"
-            autoComplete="username"
-            className="input"
-          />
-        </label>
+            <label className="block">
+              <span className="text-[13px] text-ink-500 mb-1 block">{t.email}</span>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => update("email", e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="input"
+              />
+            </label>
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-[13px] text-ink-500 mb-1 block">{t.firstName}</span>
-            <input value={form.firstName} onChange={(e) => update("firstName", e.target.value)} className="input" />
-          </label>
-          <label className="block">
-            <span className="text-[13px] text-ink-500 mb-1 block">{t.lastName}</span>
-            <input value={form.lastName} onChange={(e) => update("lastName", e.target.value)} className="input" />
-          </label>
-        </div>
+            <label className="block">
+              <span className="text-[13px] text-ink-500 mb-1 block">{t.password}</span>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(e) => update("password", e.target.value)}
+                placeholder="Кемінде 6 таңба"
+                autoComplete="new-password"
+                className="input"
+              />
+            </label>
 
-        <label className="block">
-          <span className="text-[13px] text-ink-500 mb-1 block">{t.password}</span>
-          <input
-            type="password"
-            value={form.password}
-            onChange={(e) => update("password", e.target.value)}
-            autoComplete="new-password"
-            className="input"
-          />
-        </label>
+            <label className="block">
+              <span className="text-[13px] text-ink-500 mb-1 block">{t.confirmPassword}</span>
+              <input
+                type="password"
+                value={form.confirmPassword}
+                onChange={(e) => update("confirmPassword", e.target.value)}
+                autoComplete="new-password"
+                className="input"
+              />
+            </label>
 
-        <label className="block">
-          <span className="text-[13px] text-ink-500 mb-1 block">{t.confirmPassword}</span>
-          <input
-            type="password"
-            value={form.confirmPassword}
-            onChange={(e) => update("confirmPassword", e.target.value)}
-            autoComplete="new-password"
-            className="input"
-          />
-        </label>
+            {/* Divider */}
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-ink-200" />
+              <span className="text-[12px] text-ink-400">немесе</span>
+              <div className="flex-1 h-px bg-ink-200" />
+            </div>
 
-        <label className="flex items-center gap-3 pt-1">
-          <input
-            type="checkbox"
-            checked={form.notificationsEnabled}
-            onChange={(e) => update("notificationsEnabled", e.target.checked)}
-            className="w-5 h-5 accent-brand-500"
-          />
-          <span className="text-[14px]">{t.enableNotifications}</span>
-        </label>
+            {/* Google sign-in */}
+            <button
+              type="button"
+              disabled={googleBusy}
+              onClick={onGoogle}
+              className="w-full flex items-center justify-center gap-3 py-3 rounded-2xl border border-ink-200 bg-surface text-ink-700 font-medium text-[14px] active:scale-[0.98] transition disabled:opacity-60"
+            >
+              <GoogleIcon />
+              {googleBusy ? "..." : "Google арқылы тіркелу"}
+            </button>
 
-        <label className="block pt-1">
-          <span className="text-[13px] text-ink-500 mb-1 block">{t.uploadPhoto}</span>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-            className="block text-[13px] text-ink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-ink-700"
-          />
-        </label>
+            <p className="text-center text-[14px] text-ink-500 pt-1">
+              Аккаунтыңыз бар ма?{" "}
+              <Link to="/auth/login" className="text-brand-500 font-medium">{t.signIn}</Link>
+            </p>
+          </>
+        )}
 
-        {error ? <p className="text-bad text-[13px]">{error}</p> : null}
+        {/* ── Step 2: Nickname, Name, Phone ── */}
+        {step === 2 && (
+          <>
+            <h2 className="text-xl font-bold mb-1">Профиль мәліметтері</h2>
 
-        <button type="submit" disabled={submitting} className="btn-primary mt-2">
-          {submitting ? "..." : t.signUp}
-        </button>
+            <label className="block">
+              <span className="text-[13px] text-ink-500 mb-1 block">{t.nickname} *</span>
+              <input
+                value={form.nickname}
+                onChange={(e) => update("nickname", e.target.value.replace(/\s/g, "").toLowerCase())}
+                placeholder="myhandle"
+                autoComplete="username"
+                className="input"
+              />
+              {/* Live availability indicator */}
+              {form.nickname.trim().length >= 2 && (
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  {nickStatus === "checking" && (
+                    <>
+                      <span className="w-3 h-3 rounded-full border-2 border-ink-300 border-t-transparent animate-spin" />
+                      <span className="text-[12px] text-ink-400">Тексерілуде…</span>
+                    </>
+                  )}
+                  {nickStatus === "available" && (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M5 13l4 4L19 7" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="text-[12px] text-ok font-medium">@{form.nickname} — бос</span>
+                    </>
+                  )}
+                  {nickStatus === "taken" && (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" />
+                      </svg>
+                      <span className="text-[12px] text-bad font-medium">@{form.nickname} — бос емес</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </label>
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 py-1">
-          <div className="flex-1 h-px bg-ink-200" />
-          <span className="text-[12px] text-ink-400">немесе</span>
-          <div className="flex-1 h-px bg-ink-200" />
-        </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-[13px] text-ink-500 mb-1 block">{t.firstName}</span>
+                <input
+                  value={form.firstName}
+                  onChange={(e) => update("firstName", e.target.value)}
+                  placeholder="Міндетті емес"
+                  className="input"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[13px] text-ink-500 mb-1 block">{t.lastName}</span>
+                <input
+                  value={form.lastName}
+                  onChange={(e) => update("lastName", e.target.value)}
+                  placeholder="Міндетті емес"
+                  className="input"
+                />
+              </label>
+            </div>
 
-        {/* Google sign-in */}
+            <label className="block">
+              <span className="text-[13px] text-ink-500 mb-1 block">Телефон нөмірі</span>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => update("phone", e.target.value.replace(/[^\d+\-() ]/g, ""))}
+                placeholder="+7 (777) 123-45-67"
+                autoComplete="tel"
+                className="input"
+              />
+            </label>
+
+            <label className="flex items-center gap-3 pt-1">
+              <input
+                type="checkbox"
+                checked={form.notificationsEnabled}
+                onChange={(e) => update("notificationsEnabled", e.target.checked)}
+                className="w-5 h-5 accent-brand-500"
+              />
+              <span className="text-[14px]">{t.enableNotifications}</span>
+            </label>
+          </>
+        )}
+
+        {/* ── Step 3: Photo (skippable) ── */}
+        {step === 3 && (
+          <>
+            <h2 className="text-xl font-bold mb-1">{t.uploadPhoto}</h2>
+            <p className="text-[13px] text-ink-500 mb-3">Бұл қадамды өткізіп жіберуге болады</p>
+
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+
+            {photoPreview ? (
+              <div className="relative rounded-2xl overflow-hidden h-56 bg-ink-100">
+                <img
+                  src={photoPreview}
+                  alt="Превью"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-3 right-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-xl bg-surface/90 text-[13px] font-medium text-ink-700 shadow"
+                  >
+                    Өзгерту
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    className="px-3 py-1.5 rounded-xl bg-bad/90 text-[13px] font-medium text-white shadow"
+                  >
+                    Жою
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="w-full h-56 rounded-2xl bg-brand-50 border-2 border-dashed border-brand-200
+                           flex flex-col items-center justify-center gap-3
+                           text-brand-500 hover:bg-brand-100 transition active:scale-[0.99] cursor-pointer"
+              >
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="11" fill="currentColor" opacity="0.12" />
+                  <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <span className="text-[14px] font-medium">Сурет таңдау</span>
+                <span className="text-[12px] text-brand-400">JPG, PNG, WEBP</span>
+              </button>
+            )}
+          </>
+        )}
+
+        {error && <p className="text-bad text-[13px]">{error}</p>}
+      </div>
+
+      {/* Fixed bottom button */}
+      <div className="absolute bottom-4 left-0 right-0 px-6 space-y-2">
         <button
-          type="button"
-          disabled={googleBusy}
-          onClick={onGoogle}
-          className="w-full flex items-center justify-center gap-3 py-3 rounded-2xl border border-ink-200 bg-surface text-ink-700 font-medium text-[14px] active:scale-[0.98] transition disabled:opacity-60"
+          onClick={next}
+          disabled={submitting}
+          className="btn-primary"
         >
-          <GoogleIcon />
-          {googleBusy ? "..." : "Google арқылы тіркелу"}
+          {submitting ? "..." : step === 3 ? t.signUp : t.next}
         </button>
 
-        <p className="text-center text-[14px] text-ink-500 pt-2">
-          Уже есть аккаунт?{" "}
-          <Link to="/auth/login" className="text-brand-500 font-medium">{t.signIn}</Link>
-        </p>
-      </form>
+        {step === 3 && !photoFile && (
+          <button
+            onClick={submit}
+            disabled={submitting}
+            className="w-full py-3 rounded-2xl text-[14px] font-semibold text-ink-500 bg-ink-100 active:scale-[0.99] transition"
+          >
+            {submitting ? "..." : "Суретсіз жалғастыру"}
+          </button>
+        )}
+      </div>
     </MobileShell>
   );
 }
@@ -213,10 +396,10 @@ function GoogleIcon() {
 
 function prettyError(err) {
   const code = err?.code || "";
-  if (code === "auth/email-already-in-use") return "Этот email уже зарегистрирован";
-  if (code === "auth/invalid-email") return "Некорректный email";
-  if (code === "auth/weak-password") return "Слишком простой пароль (минимум 6 символов)";
+  if (code === "auth/email-already-in-use") return "Бұл email тіркелген";
+  if (code === "auth/invalid-email") return "Қате email";
+  if (code === "auth/weak-password") return "Құпия сөз тым қарапайым (кемінде 6 таңба)";
   if (code === "auth/operation-not-allowed")
     return "Email/Password sign-in выключен в Firebase. Откройте Firebase Console → Authentication → Sign-in method и включите его.";
-  return err?.message || "Ошибка регистрации";
+  return err?.message || "Тіркелу қатесі";
 }
