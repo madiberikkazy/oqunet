@@ -20,10 +20,11 @@ export default function JoinCommunity() {
       // Fetch member + book counts in parallel for all communities
       const enriched = await Promise.all(
         rows.map(async (c) => {
-          const [members, books] = await Promise.all([
+          const [members, booksResult] = await Promise.all([
             listUsersByCommunity(c.id),
             listBooks({ communityId: c.id }),
           ]);
+          const books = booksResult?.items || booksResult || [];
           return { ...c, memberCount: members.length, bookCount: books.length };
         })
       );

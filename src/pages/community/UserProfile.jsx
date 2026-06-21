@@ -18,7 +18,8 @@ export default function UserProfile() {
       const user = await getUserById(id); setU(user);
       if (user?.communityId) {
         setCommunity(await getCommunity(user.communityId));
-        const all = await listBooks({ communityId: user.communityId });
+        const allResult = await listBooks({ communityId: user.communityId });
+        const all = allResult?.items || allResult || [];
         setBooks(all.filter((b) => b.ownerId === user.id));
       }
     })();

@@ -22,7 +22,8 @@ export default function Profile() {
       if (!user) return;
       const readingList = await listBorrowingsForUser(user.id, "active");
       const completed   = await listBorrowingsForUser(user.id, "completed");
-      const allBooks = community?.id ? await listBooks({ communityId: community.id }) : [];
+      const allBooksResult = community?.id ? await listBooks({ communityId: community.id }) : { items: [] };
+      const allBooks = allBooksResult?.items || allBooksResult || [];
       // Same logic as OwnedBooks.jsx — books you physically hold right now
       const owned = allBooks.filter(
         (b) =>

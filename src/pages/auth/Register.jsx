@@ -107,7 +107,7 @@ export default function Register() {
           <span className="text-[13px] text-ink-500 mb-1 block">{t.nickname}</span>
           <input
             value={form.nickname}
-            onChange={(e) => update("nickname", e.target.value.replace(/\s/g, ""))}
+            onChange={(e) => update("nickname", e.target.value.replace(/\s/g, "").toLowerCase())}
             placeholder="myhandle"
             autoComplete="username"
             className="input"

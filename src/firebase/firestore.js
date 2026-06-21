@@ -133,6 +133,10 @@ export async function searchUsers(qStr) {
 }
 
 // ---------- Communities ----------
+export async function getCommunityByNickname(nickname) {
+  const rows = await getCollection("communities", { where: [["nickname", "==", nickname]] });
+  return rows[0] || null;
+}
 export async function createCommunity(payload) { return createOne("communities", payload); }
 export async function getCommunity(id) { return getOne("communities", id); }
 export async function updateCommunity(id, patch) { return updateOne("communities", id, patch); }
