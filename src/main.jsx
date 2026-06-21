@@ -15,9 +15,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <CommunityProvider>
-            <App />
-          </CommunityProvider>
+          <NotificationProvider>
+            <CommunityProvider>
+              <App />
+            </CommunityProvider>
+          </NotificationProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>
