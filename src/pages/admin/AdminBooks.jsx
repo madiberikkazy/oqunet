@@ -7,6 +7,7 @@ import { listBooks, deleteBook } from "../../firebase/firestore.js";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { debounce } from "../../utils/performanceHelpers.js";
 import { cacheService } from "../../utils/cacheService.js";
+import { t } from "../../utils/i18n.js";
 
 const FALLBACK =
   "data:image/svg+xml;utf8," +
