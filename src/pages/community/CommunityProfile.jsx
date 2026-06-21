@@ -48,7 +48,7 @@ export default function CommunityProfile() {
         listPostsByCommunity(id),
       ]).then(([m, b, p]) => {
         if (m.status === "fulfilled") setMembers(m.value);
-        if (b.status === "fulfilled") setBooks(b.value);
+        if (b.status === "fulfilled") setBooks(b.value?.items || b.value || []);
         if (p.status === "fulfilled") setPosts(p.value);
         setContentLoading(false);
       });

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import Stepper from "../../components/Stepper.jsx";
-import { createCommunity, updateUser } from "../../firebase/firestore.js";
+import { createCommunity, updateUser, getUserByNickname, getCommunityByNickname } from "../../firebase/firestore.js";
 import { uploadImage } from "../../firebase/storage.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
@@ -37,11 +37,19 @@ export default function CreateCommunity() {
     if (photoPreview) { URL.revokeObjectURL(photoPreview); setPhotoPreview(null); }
   }
 
-  function next() {
+  async function next() {
     setError("");
     if (step === 1) {
       if (!form.nickname.trim() || !form.name.trim()) {
         setError("Заполните оба поля");
+        return;
+      }
+      const [userMatch, communityMatch] = await Promise.all([
+        getUserByNickname(form.nickname),
+        getCommunityByNickname(form.nickname),
+      ]);
+      if (userMatch || communityMatch) {
+        setError("Бұл никнейм бос емес. Басқа никнейм таңдаңыз.");
         return;
       }
     }
