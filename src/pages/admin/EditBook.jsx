@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import Avatar from "../../components/Avatar.jsx";
 import { getBook, updateBook, listUsersByCommunity } from "../../firebase/firestore.js";
-import { uploadImage } from "../../firebase/storage.js";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { t, GENRES } from "../../utils/i18n.js";
 
@@ -17,8 +16,6 @@ export default function EditBook() {
   const { id }        = useParams();
   const navigate      = useNavigate();
   const { community } = useCommunity();
-  const coverRef      = useRef(null);
-
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState("");
@@ -26,13 +23,10 @@ export default function EditBook() {
   const [members, setMembers]       = useState([]);
   const [showOwner, setShowOwner]   = useState(false);
 
-  // form mirrors the book document
   const [form, setForm] = useState({
     name: "", author: "", year: "", maxDays: 14,
-    description: "", ownerId: "", coverUrl: "", status: "available", genre: "",
+    description: "", ownerId: "", coverUrl: "", status: "available", genres: [],
   });
-  const [coverFile, setCoverFile]     = useState(null);
-  const [coverPreview, setCoverPreview] = useState(null);
 
   function upd(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -50,47 +44,36 @@ export default function EditBook() {
         ownerId:     book.ownerId     || "",
         coverUrl:    book.coverUrl    || "",
         status:      book.status      || "available",
-        genre:       book.genre       || "",
+        genres:      book.genres || (book.genre ? [book.genre] : []),
       });
       if (community?.id) setMembers(await listUsersByCommunity(community.id));
       setLoading(false);
     })();
   }, [id, community?.id]);
 
-  function onPickCover(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
-  }
-
   async function handleSave() {
     if (saving) return;
     if (!form.name.trim() || !form.author.trim()) {
-      setError("Введите название и автора");
+      setError("Атауы мен авторын жазыңыз");
       return;
     }
+    if (form.genres.length < 1) { setError("Кемінде 1 жанр таңдаңыз"); return; }
+    if (form.maxDays < 3 || form.maxDays > 30) { setError("Мерзім 3-тен 30 күнге дейін болуы тиіс"); return; }
     setSaving(true);
     setError("");
     setSuccess(false);
     try {
-      let coverUrl = form.coverUrl;
-      if (coverFile) {
-        coverUrl = await uploadImage(coverFile, `books/${id}_${Date.now()}`);
-      }
-      await updateBook(id, { ...form, coverUrl });
-      setForm((f) => ({ ...f, coverUrl }));
-      setCoverFile(null);
+      await updateBook(id, { ...form, genre: form.genres[0] });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError(err?.message || "Ошибка сохранения");
+      setError(err?.message || "Сақтау қатесі");
     } finally {
       setSaving(false);
     }
   }
 
-  const coverSrc = coverPreview || form.coverUrl || FALLBACK;
+  const coverSrc = form.coverUrl || FALLBACK;
   const ownerMember = members.find((m) => m.id === form.ownerId);
 
   if (loading) {
@@ -115,28 +98,15 @@ export default function EditBook() {
 
       <div className="px-5 pt-4 pb-10 space-y-5">
 
-        {/* ── Cover photo ── */}
+        {/* ── Cover photo (URL only) ── */}
         <div>
           <p className="text-[13px] text-ink-500 mb-2">{t.bookPhoto}</p>
-          <button
-            type="button"
-            onClick={() => coverRef.current?.click()}
-            className="relative w-full h-52 rounded-2xl overflow-hidden bg-ink-100 group focus:outline-none"
-          >
+          <div className="w-full h-52 rounded-2xl overflow-hidden bg-ink-100">
             <img src={coverSrc} alt="" className="w-full h-full object-cover" />
-            {/* camera overlay */}
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                  stroke="white" strokeWidth="1.6" strokeLinejoin="round" />
-                <circle cx="12" cy="13" r="4" stroke="white" strokeWidth="1.6" />
-              </svg>
-            </div>
-          </button>
-          <input ref={coverRef} type="file" accept="image/*" className="hidden" onChange={onPickCover} />
+          </div>
           <input
             value={form.coverUrl}
-            onChange={(e) => { upd("coverUrl", e.target.value); setCoverPreview(null); setCoverFile(null); }}
+            onChange={(e) => upd("coverUrl", e.target.value)}
             placeholder={t.orPasteUrl}
             className="input mt-2 text-[13px]"
           />
@@ -175,9 +145,10 @@ export default function EditBook() {
             <div>
               <label className="text-[13px] text-ink-500 mb-1 block">{t.maxDays}</label>
               <input
-                type="number" min="1" max="365"
+                type="number" min="3" max="30"
                 value={form.maxDays}
                 onChange={(e) => upd("maxDays", Number(e.target.value))}
+                placeholder="3 — 30 күн"
                 className="input"
               />
             </div>
@@ -195,22 +166,36 @@ export default function EditBook() {
           </div>
         </div>
 
-        {/* ── Genre ── */}
+        {/* ── Genre (min 1, max 3) ── */}
         <div>
-          <label className="text-[13px] text-ink-500 mb-2 block">{t.genre}</label>
+          <label className="text-[13px] text-ink-500 mb-2 block">
+            {t.genre} ({(form.genres || []).length}/3)
+          </label>
           <div className="flex flex-wrap gap-2">
             {GENRES.map((g) => {
               const lang = typeof window !== "undefined" ? localStorage.getItem("lang") || "kz" : "kz";
+              const genres = form.genres || [];
+              const selected = genres.includes(g.value);
+              const disabled = !selected && genres.length >= 3;
               return (
                 <button
                   key={g.value}
                   type="button"
-                  onClick={() => upd("genre", form.genre === g.value ? "" : g.value)}
+                  disabled={disabled}
+                  onClick={() => {
+                    if (selected) {
+                      upd("genres", genres.filter((v) => v !== g.value));
+                    } else if (genres.length < 3) {
+                      upd("genres", [...genres, g.value]);
+                    }
+                  }}
                   className={
                     "px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors " +
-                    (form.genre === g.value
+                    (selected
                       ? "bg-brand-500 text-white"
-                      : "bg-ink-100 text-ink-700")
+                      : disabled
+                        ? "bg-ink-100 text-ink-300 cursor-not-allowed"
+                        : "bg-ink-100 text-ink-700")
                   }
                 >
                   {g[lang] ?? g.kz}
