@@ -4,7 +4,6 @@ import MobileShell from "../../components/MobileShell.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
 import { listUsersByCommunity, createBook } from "../../firebase/firestore.js";
-import { uploadImage } from "../../firebase/storage.js";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { t, GENRES } from "../../utils/i18n.js";
 
@@ -14,9 +13,9 @@ export default function AddBook() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "", author: "", year: "", givenAt: "", maxDays: 14,
-    description: "", ownerId: "", coverUrl: "", genre: "",
+    description: "", ownerId: "", coverUrl: "", genres: [],
   });
-  const [coverFile, setCoverFile] = useState(null);
+  // No file upload — only URL paste
   const [members, setMembers] = useState([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
@@ -35,21 +34,21 @@ export default function AddBook() {
   async function onNext() {
     setError("");
     if (step === 1) {
-      if (!form.name.trim() || !form.author.trim()) { setError("Заполните название и автора"); return; }
+      if (!form.name.trim() || !form.author.trim()) { setError("Атауы мен авторын жазыңыз"); return; }
+      if (form.genres.length < 1) { setError("Кемінде 1 жанр таңдаңыз"); return; }
+      if (form.maxDays < 3 || form.maxDays > 30) { setError("Мерзім 3-тен 30 күнге дейін болуы тиіс"); return; }
     }
-    if (step === 2 && !form.ownerId) { setError("Выберите владельца книги"); return; }
+    if (step === 2 && !form.ownerId) { setError("Кітап иесін таңдаңыз"); return; }
     if (step < 3) { setStep(step + 1); return; }
 
     setSubmitting(true);
     try {
-      let coverUrl = form.coverUrl;
-      if (coverFile) coverUrl = await uploadImage(coverFile, `books/${Date.now()}_${coverFile.name}`);
       const book = await createBook({
-        ...form, coverUrl, communityId: community.id, status: "available", createdAt: Date.now(),
+        ...form, genre: form.genres[0], communityId: community.id, status: "available", createdAt: Date.now(),
       });
       navigate(`/books/${book.id}`, { replace: true });
     } catch (err) {
-      setError(err?.message || "Ошибка создания книги");
+      setError(err?.message || "Кітап құру қатесі");
     } finally { setSubmitting(false); }
   }
 
@@ -70,7 +69,7 @@ export default function AddBook() {
       <div className="px-5 pt-3 pb-24">
         {step === 1 ? <Step1 form={form} update={update} /> : null}
         {step === 2 ? <Step2 members={filteredMembers} search={search} setSearch={setSearch} selectedId={form.ownerId} onSelect={(id) => update("ownerId", id)} /> : null}
-        {step === 3 ? <Step3 coverFile={coverFile} setCoverFile={setCoverFile} coverUrl={form.coverUrl} setCoverUrl={(v) => update("coverUrl", v)} /> : null}
+        {step === 3 ? <Step3 coverUrl={form.coverUrl} setCoverUrl={(v) => update("coverUrl", v)} /> : null}
         {error ? <p className="text-bad text-[13px] mt-3">{error}</p> : null}
       </div>
 
@@ -85,6 +84,16 @@ export default function AddBook() {
 
 function Step1({ form, update }) {
   const lang = typeof window !== "undefined" ? localStorage.getItem("lang") || "kz" : "kz";
+  const genres = form.genres || [];
+
+  function toggleGenre(value) {
+    if (genres.includes(value)) {
+      update("genres", genres.filter((g) => g !== value));
+    } else if (genres.length < 3) {
+      update("genres", [...genres, value]);
+    }
+  }
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-3">{t.basicData}</h2>
@@ -96,28 +105,45 @@ function Step1({ form, update }) {
             <option value="">{t.year}</option>
             {Array.from({ length: 120 }, (_, i) => 2025 - i).map((y) => (<option key={y} value={y}>{y}</option>))}
           </select>
-          <input type="number" min="1" max="60" value={form.maxDays} onChange={(e) => update("maxDays", Number(e.target.value))} placeholder={t.maxDays} className="input" />
+          <input
+            type="number"
+            min="3"
+            max="30"
+            value={form.maxDays}
+            onChange={(e) => update("maxDays", Number(e.target.value))}
+            placeholder="3 — 30 күн"
+            className="input"
+          />
         </div>
 
-        {/* Genre picker */}
+        {/* Genre picker — min 1, max 3 */}
         <div>
-          <span className="text-[13px] text-ink-500 mb-2 block">{t.genre}</span>
+          <span className="text-[13px] text-ink-500 mb-2 block">
+            {t.genre} ({genres.length}/3)
+          </span>
           <div className="flex flex-wrap gap-2">
-            {GENRES.map((g) => (
-              <button
-                key={g.value}
-                type="button"
-                onClick={() => update("genre", form.genre === g.value ? "" : g.value)}
-                className={
-                  "px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors " +
-                  (form.genre === g.value
-                    ? "bg-brand-500 text-white"
-                    : "bg-ink-100 text-ink-700")
-                }
-              >
-                {g[lang] ?? g.kz}
-              </button>
-            ))}
+            {GENRES.map((g) => {
+              const selected = genres.includes(g.value);
+              const disabled = !selected && genres.length >= 3;
+              return (
+                <button
+                  key={g.value}
+                  type="button"
+                  onClick={() => toggleGenre(g.value)}
+                  disabled={disabled}
+                  className={
+                    "px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors " +
+                    (selected
+                      ? "bg-brand-500 text-white"
+                      : disabled
+                        ? "bg-ink-100 text-ink-300 cursor-not-allowed"
+                        : "bg-ink-100 text-ink-700")
+                  }
+                >
+                  {g[lang] ?? g.kz}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -154,24 +180,31 @@ function Step2({ members, search, setSearch, selectedId, onSelect }) {
   );
 }
 
-function Step3({ coverFile, setCoverFile, coverUrl, setCoverUrl }) {
-  const preview = coverFile ? URL.createObjectURL(coverFile) : coverUrl;
+function Step3({ coverUrl, setCoverUrl }) {
   return (
     <div>
       <h3 className="section-title mb-2">{t.bookPhoto}</h3>
-      <label className="block bg-brand-50 rounded-2xl h-44 flex items-center justify-center cursor-pointer overflow-hidden">
-        {preview ? <img src={preview} alt="" className="w-full h-full object-cover" /> : (
-          <span className="flex flex-col items-center text-brand-500">
-            <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="12" r="11" fill="currentColor" opacity="0.15" />
-              <path d="M12 7v10M7 12h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <span className="text-[13px] mt-2">{t.addPhoto}</span>
-          </span>
-        )}
-        <input type="file" accept="image/*" className="hidden" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} />
-      </label>
-      <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} placeholder={t.orPasteUrl} className="input mt-3" />
+
+      {coverUrl ? (
+        <div className="rounded-2xl h-44 bg-ink-100 overflow-hidden mb-3">
+          <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className="rounded-2xl h-44 bg-brand-50 border-2 border-dashed border-brand-200 flex flex-col items-center justify-center gap-2 text-brand-500 mb-3">
+          <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="11" fill="currentColor" opacity="0.12" />
+            <path d="M7 12h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <span className="text-[13px]">URL арқылы сурет қосыңыз</span>
+        </div>
+      )}
+
+      <input
+        value={coverUrl}
+        onChange={(e) => setCoverUrl(e.target.value)}
+        placeholder={t.orPasteUrl}
+        className="input"
+      />
     </div>
   );
 }

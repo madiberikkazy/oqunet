@@ -366,11 +366,14 @@ export async function getActiveBorrowingByBook(bookId) {
 export async function getLastCompletedBorrowingByBook(bookId) {
   const rows = await getCollection("borrowings", {
     where: [["bookId", "==", bookId], ["status", "==", "completed"]],
-    orderByField: "createdAt",
-    descending: true,
-    pageSize: 1,
   });
-  return rows[0] || null;
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => {
+    const at = a.createdAt?.toMillis?.() ?? a.createdAt ?? 0;
+    const bt = b.createdAt?.toMillis?.() ?? b.createdAt ?? 0;
+    return bt - at;
+  });
+  return rows[0];
 }
 export async function listBorrowingsForUser(userId, status) {
   const wheres = [["borrowerId", "==", userId]];

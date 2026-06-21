@@ -10,6 +10,7 @@ import {
   getBook, getUserById, listRatingsForBook, listReviewsForBook, updateUser,
   getPickupRequest, createPickupRequest,
   getActiveBorrowingByBook, getLastCompletedBorrowingByBook, createNotification,
+  updateBook, updateBorrowing,
 } from "../../firebase/firestore.js";
 import { t, genreLabel } from "../../utils/i18n.js";
 
@@ -31,6 +32,8 @@ export default function BookDetail() {
   const [pickupRequest, setPickupRequest] = useState(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(null);
+  const [daysLeft, setDaysLeft]     = useState(null);
+  const [borrowingMaxDays, setBorrowingMaxDays] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -76,15 +79,36 @@ export default function BookDetail() {
           setReviews([]);
         }
 
-        // Load who physically has the book:
-        // unavailable → active borrower (current holder)
-        // available   → last person who returned it (most recent completed borrowing)
         if (b?.status === "unavailable") {
           try {
             const borrowing = await getActiveBorrowingByBook(id);
-            if (borrowing?.borrowerId) {
-              const holderData = await getUserById(borrowing.borrowerId);
-              if (holderData) setCurrentHolder(holderData);
+            if (borrowing) {
+              // Compute days left
+              if (borrowing.returnDate) {
+                const retTs = typeof borrowing.returnDate === "number"
+                  ? borrowing.returnDate
+                  : new Date(borrowing.returnDate).getTime();
+                const remaining = Math.ceil((retTs - Date.now()) / 86400000);
+                const startTs = borrowing.startDate?.toMillis?.() ?? borrowing.startDate ?? Date.now();
+                const totalDays = Math.ceil((retTs - startTs) / 86400000);
+                setBorrowingMaxDays(totalDays);
+
+                if (remaining <= 0) {
+                  // Auto-return: booking days expired
+                  await updateBook(id, { status: "available", borrowerId: null, holderId: null });
+                  await updateBorrowing(borrowing.id, { status: "completed" });
+                  b.status = "available";
+                  setBook({ ...b, status: "available" });
+                  setDaysLeft(null);
+                } else {
+                  setDaysLeft(remaining);
+                }
+              }
+
+              if (b.status === "unavailable" && borrowing.borrowerId) {
+                const holderData = await getUserById(borrowing.borrowerId);
+                if (holderData) setCurrentHolder(holderData);
+              }
             }
           } catch (err) {
             console.error("Error loading current holder:", err);
@@ -248,12 +272,17 @@ export default function BookDetail() {
           <h1 className="text-2xl font-bold leading-tight">{book.name}</h1>
           <p className="text-[15px] text-ink-500 mt-1">{book.author}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <BookStatusBadge status={book.status} daysLeft={book.daysLeft} />
+            <BookStatusBadge status={book.status} daysLeft={daysLeft} />
             {book.genre ? (
               <span className="pill bg-ink-100 text-ink-700 text-[12px]">
                 {genreLabel(book.genre)}
               </span>
             ) : null}
+            {(book.genres || []).filter((g) => g !== book.genre).map((g) => (
+              <span key={g} className="pill bg-ink-100 text-ink-700 text-[12px]">
+                {genreLabel(g)}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -279,6 +308,27 @@ export default function BookDetail() {
           </button>
         ) : null}
       </section>
+
+      {/* Days left countdown */}
+      {book.status === "unavailable" && daysLeft != null && (
+        <section className="px-4 mt-5">
+          <div className={"rounded-2xl px-4 py-4 flex items-center gap-4 " +
+            (daysLeft <= 3 ? "bg-badSoft" : daysLeft <= 7 ? "bg-warnSoft" : "bg-brand-50")}>
+            <div className={"w-14 h-14 rounded-xl flex items-center justify-center text-[22px] font-bold " +
+              (daysLeft <= 3 ? "bg-bad text-white" : daysLeft <= 7 ? "bg-warn text-white" : "bg-brand-500 text-white")}>
+              {daysLeft}
+            </div>
+            <div>
+              <p className="font-semibold text-[15px]">
+                {daysLeft === 1 ? "1 күн қалды" : `${daysLeft} күн қалды`}
+              </p>
+              <p className="text-[13px] text-ink-500">
+                {borrowingMaxDays ? `${borrowingMaxDays} күннен` : ""} — қайтару мерзімі
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="px-4 mt-5 flex items-center justify-between">
         <div>
