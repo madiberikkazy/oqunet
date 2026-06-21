@@ -32,7 +32,7 @@ function writeMock(value) {
  * Creates a Firebase Auth user and a profile document in Firestore.
  */
 export async function registerWithEmail({
-  email, password, nickname, firstName, lastName, notificationsEnabled, photoURL,
+  email, password, nickname, firstName, lastName, phone, notificationsEnabled, photoURL,
 }) {
   const cleanEmail = email.trim().toLowerCase();
 
@@ -54,8 +54,9 @@ export async function registerWithEmail({
     id: uid,
     email: cleanEmail,
     nickname,
-    firstName,
-    lastName,
+    firstName: firstName || "",
+    lastName: lastName || "",
+    phone: phone || "",
     notificationsEnabled: Boolean(notificationsEnabled),
     photoURL: photoURL || "",
     role: "user",
