@@ -5,11 +5,13 @@ import Stepper from "../../components/Stepper.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
 import { listUsersByCommunity, createBook, createNotification } from "../../firebase/firestore.js";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
+import { useAuth } from "../../contexts/AuthContext.jsx";
 import { t, GENRES } from "../../utils/i18n.js";
 
 export default function AddBook() {
   const navigate = useNavigate();
   const { community } = useCommunity();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "", author: "", year: "", givenAt: "", maxDays: 14,
@@ -48,8 +50,13 @@ export default function AddBook() {
       });
 
       // Notify every community member that a new book has been added.
+      // Re-fetch the member list so we don't rely on the initial useEffect having
+      // resolved before the admin reaches step 3.
       try {
-        const recipients = members.filter((m) => m.id && m.id !== form.ownerId);
+        const fresh = await listUsersByCommunity(community.id);
+        const recipients = (fresh || []).filter(
+          (m) => m.id && m.id !== user?.id
+        );
         await Promise.all(
           recipients.map((m) =>
             createNotification({
@@ -62,6 +69,7 @@ export default function AddBook() {
             })
           )
         );
+        console.log(`[OquNet] Sent new-book notification to ${recipients.length} member(s)`);
       } catch (notifyErr) {
         console.error("Failed to notify members about new book:", notifyErr);
       }
