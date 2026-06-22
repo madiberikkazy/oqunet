@@ -7,6 +7,8 @@ import { listUsersByCommunity, createBook, createNotification } from "../../fire
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { t, GENRES } from "../../utils/i18n.js";
+import { validateBookPayload, safeImageUrl } from "../../utils/validators.js";
+import { logger } from "../../utils/logger.js";
 
 export default function AddBook() {
   const navigate = useNavigate();
@@ -23,7 +25,18 @@ export default function AddBook() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { if (community?.id) listUsersByCommunity(community.id).then(setMembers); }, [community?.id]);
+  useEffect(() => {
+    if (!community?.id) return;
+    let alive = true;
+    listUsersByCommunity(community.id)
+      .then((rows) => { if (alive) setMembers(Array.isArray(rows) ? rows : []); })
+      .catch((err) => {
+        if (!alive) return;
+        logger.error("addBook.loadMembers", err?.message, { code: err?.code });
+        setMembers([]);
+      });
+    return () => { alive = false; };
+  }, [community?.id]);
 
   const filteredMembers = useMemo(() => {
     if (!search) return members;
@@ -34,19 +47,39 @@ export default function AddBook() {
   function update(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
   async function onNext() {
+    if (submitting) return; // hard guard against double-tap on slow networks
     setError("");
     if (step === 1) {
-      if (!form.name.trim() || !form.author.trim()) { setError("Атауы мен авторын жазыңыз"); return; }
-      if (form.genres.length < 1) { setError("Кемінде 1 жанр таңдаңыз"); return; }
-      if (form.maxDays < 3 || form.maxDays > 30) { setError("Мерзім 3-тен 30 күнге дейін болуы тиіс"); return; }
+      if (!form.name.trim() || !form.author.trim()) { setError(t.addBookErrName); return; }
+      if (form.genres.length < 1) { setError(t.addBookErrGenre); return; }
+      if (form.maxDays < 3 || form.maxDays > 30) { setError(t.addBookErrMaxDays); return; }
     }
-    if (step === 2 && !form.ownerId) { setError("Кітап иесін таңдаңыз"); return; }
+    if (step === 2 && !form.ownerId) { setError(t.addBookErrOwner); return; }
     if (step < 3) { setStep(step + 1); return; }
+
+    // Step 3 — final submit. Re-validate everything so a step-skipping bypass
+    // (or a stale form) can't get past the per-step checks.
+    const validation = validateBookPayload(form);
+    if (!validation.ok) { setError(t[validation.errorKey] || t.error); return; }
+    if (!form.ownerId) { setError(t.addBookErrOwner); return; }
+    if (!community?.id) { setError(t.loadFailed); return; }
 
     setSubmitting(true);
     try {
+      const safe = validation.value;
       const book = await createBook({
-        ...form, genre: form.genres[0], communityId: community.id, status: "available", createdAt: Date.now(),
+        name: safe.name,
+        author: safe.author,
+        description: safe.description,
+        coverUrl: safeImageUrl(safe.coverUrl),
+        year: safe.year,
+        maxDays: safe.maxDays,
+        genres: safe.genres,
+        ownerId: form.ownerId,
+        genre: safe.genres[0],
+        communityId: community.id,
+        status: "available",
+        createdAt: Date.now(),
       });
 
       // Notify every community member that a new book has been added.
@@ -76,7 +109,8 @@ export default function AddBook() {
 
       navigate(`/books/${book.id}`, { replace: true });
     } catch (err) {
-      setError(err?.message || "Кітап құру қатесі");
+      logger.error("addBook.create", err?.message, { code: err?.code });
+      setError(err?.message || t.addBookError);
     } finally { setSubmitting(false); }
   }
 

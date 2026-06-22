@@ -6,20 +6,50 @@ import {
   query, where, orderBy, limit, startAfter, serverTimestamp,
 } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "./config.js";
+import { logger } from "../utils/logger.js";
+
+// Wraps a Firestore operation. Re-throws so callers can decide what to do,
+// but always logs the failure first so it doesn't get swallowed silently.
+async function runFs(scope, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    logger.error(`firestore.${scope}`, err?.message || "unknown error", {
+      code: err?.code,
+    });
+    throw err;
+  }
+}
 
 // ---------- localStorage fallback ----------
 const LS_KEY = "oqunet:db";
-function readLS() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || emptyDb(); }
-  catch { return emptyDb(); }
-}
 function emptyDb() {
   return {
     users: [], communities: [], books: [], posts: [],
     notifications: [], requests: [], borrowings: [], ratings: [], reviews: [],
   };
 }
-function writeLS(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+function readLS() {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(LS_KEY) : null;
+    return raw ? (JSON.parse(raw) || emptyDb()) : emptyDb();
+  } catch (err) {
+    logger.warn("firestore.readLS", err?.message);
+    return emptyDb();
+  }
+}
+function writeLS(data) {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    }
+  } catch (err) {
+    // Quota-exceeded is the most common cause; rethrow so the caller's
+    // try/catch can surface a user-visible error instead of silently dropping.
+    logger.error("firestore.writeLS", err?.message);
+    throw err;
+  }
+}
 function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
 // ---------- Generic helpers ----------
@@ -59,51 +89,65 @@ async function getCollection(name, { where: wheres = [], orderByField, descendin
 
 async function getOne(name, id) {
   if (!id) return null;
-  if (isFirebaseConfigured) {
-    const snap = await getDoc(doc(db, name, id));
-    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
-  }
-  const data = readLS();
-  return (data[name] || []).find((r) => r.id === id) || null;
+  return runFs(`getOne.${name}`, async () => {
+    if (isFirebaseConfigured) {
+      const snap = await getDoc(doc(db, name, id));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    }
+    const data = readLS();
+    return (data[name] || []).find((r) => r.id === id) || null;
+  });
 }
 
 async function createOne(name, payload) {
-  if (isFirebaseConfigured) {
-    if (payload.id) {
-      await setDoc(doc(db, name, payload.id), { ...payload, createdAt: serverTimestamp() });
-      return payload;
-    }
-    const ref = await addDoc(collection(db, name), { ...payload, createdAt: serverTimestamp() });
-    return { id: ref.id, ...payload };
+  if (!payload || typeof payload !== "object") {
+    throw new Error("createOne: payload must be an object");
   }
-  const data = readLS();
-  const record = { id: payload.id || uid(), createdAt: Date.now(), ...payload };
-  data[name] = data[name] || [];
-  data[name].push(record);
-  writeLS(data);
-  return record;
+  return runFs(`createOne.${name}`, async () => {
+    if (isFirebaseConfigured) {
+      if (payload.id) {
+        await setDoc(doc(db, name, payload.id), { ...payload, createdAt: serverTimestamp() });
+        return payload;
+      }
+      const ref = await addDoc(collection(db, name), { ...payload, createdAt: serverTimestamp() });
+      return { id: ref.id, ...payload };
+    }
+    const data = readLS();
+    const record = { id: payload.id || uid(), createdAt: Date.now(), ...payload };
+    data[name] = data[name] || [];
+    data[name].push(record);
+    writeLS(data);
+    return record;
+  });
 }
 
 async function updateOne(name, id, patch) {
-  if (isFirebaseConfigured) {
-    await updateDoc(doc(db, name, id), patch);
-    return { id, ...patch };
-  }
-  const data = readLS();
-  const idx = (data[name] || []).findIndex((r) => r.id === id);
-  if (idx >= 0) {
-    data[name][idx] = { ...data[name][idx], ...patch };
-    writeLS(data);
-    return data[name][idx];
-  }
-  return null;
+  if (!id) throw new Error("updateOne: missing id");
+  if (!patch || typeof patch !== "object") throw new Error("updateOne: patch must be an object");
+  return runFs(`updateOne.${name}`, async () => {
+    if (isFirebaseConfigured) {
+      await updateDoc(doc(db, name, id), patch);
+      return { id, ...patch };
+    }
+    const data = readLS();
+    const idx = (data[name] || []).findIndex((r) => r.id === id);
+    if (idx >= 0) {
+      data[name][idx] = { ...data[name][idx], ...patch };
+      writeLS(data);
+      return data[name][idx];
+    }
+    return null;
+  });
 }
 
 async function deleteOne(name, id) {
-  if (isFirebaseConfigured) { await deleteDoc(doc(db, name, id)); return; }
-  const data = readLS();
-  data[name] = (data[name] || []).filter((r) => r.id !== id);
-  writeLS(data);
+  if (!id) throw new Error("deleteOne: missing id");
+  return runFs(`deleteOne.${name}`, async () => {
+    if (isFirebaseConfigured) { await deleteDoc(doc(db, name, id)); return; }
+    const data = readLS();
+    data[name] = (data[name] || []).filter((r) => r.id !== id);
+    writeLS(data);
+  });
 }
 
 // ---------- Users ----------

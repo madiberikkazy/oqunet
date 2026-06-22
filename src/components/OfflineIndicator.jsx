@@ -1,23 +1,20 @@
 import { useEffect, useState } from 'react';
+import { t } from '../utils/i18n.js';
+
+function navOnline() {
+  // navigator may be undefined in some test/SSR contexts; treat that as online.
+  if (typeof navigator === 'undefined') return true;
+  return navigator.onLine !== false;
+}
 
 export default function OfflineIndicator() {
-  const [isOnline, setIsOnline] = useState(!isOffline());
-  const [showBanner, setShowBanner] = useState(!navigator.onLine);
+  const [showBanner, setShowBanner] = useState(!navOnline());
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setShowBanner(false);
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-      setShowBanner(true);
-    };
-
+    const handleOnline = () => setShowBanner(false);
+    const handleOffline = () => setShowBanner(true);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -34,7 +31,7 @@ export default function OfflineIndicator() {
           <circle cx="12" cy="12" r="3" fill="currentColor" />
         </svg>
         <span className="text-[14px] font-medium">
-          Вы в режиме оффлайн. Некоторые функции недоступны.
+          {t.offlineWarning}
         </span>
         <button
           onClick={() => setShowBanner(false)}
@@ -47,6 +44,3 @@ export default function OfflineIndicator() {
   );
 }
 
-function isOffline() {
-  return !navigator.onLine;
-}

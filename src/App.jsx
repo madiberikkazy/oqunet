@@ -58,14 +58,16 @@ export default function App() {
           {/* Pickup flow — replaces the old /request route */}
           <Route path="/books/:id/pickup" element={<PickupBook />} />
 
-          <Route path="/books/add" element={<AddBook />} />
-          <Route path="/books/:id/edit" element={<EditBook />} />
+          {/* Admin-only routes — gated by the real DB role */}
+          <Route element={<ProtectedRoute adminOnly />}>
+            <Route path="/books/add" element={<AddBook />} />
+            <Route path="/books/:id/edit" element={<EditBook />} />
+            <Route path="/admin/members" element={<AdminMembers />} />
+          </Route>
 
           <Route path="/notifications" element={<RoleRoute userElement={<Notification />} adminElement={<AdminNotification />} />} />
           {/* Notification detail — shared between user and admin */}
           <Route path="/notifications/:id" element={<NotificationDetail />} />
-
-          <Route path="/admin/members" element={<AdminMembers />} />
           <Route path="/profile" element={<RoleRoute userElement={<Profile />} adminElement={<AdminProfile />} />} />
           <Route path="/profile/owned"     element={<OwnedBooks />} />
           <Route path="/profile/reading"   element={<ReadingNow />} />

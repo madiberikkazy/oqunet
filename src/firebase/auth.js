@@ -16,15 +16,21 @@ import {
   getUserByNickname,
   getUserById,
 } from "./firestore.js";
+import { isEmail, isNickname, normalizeEmail, normalizeNickname, LIMITS } from "../utils/validators.js";
+import { safeGet, safeSet, safeRemove } from "../utils/safeStorage.js";
+import { logger } from "../utils/logger.js";
+import { t } from "../utils/i18n.js";
 
 const STORE_KEY = "oqunet:auth";
 
 function readMock() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch { return null; }
+  const raw = safeGet(STORE_KEY, null);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
 }
 function writeMock(value) {
-  if (value) localStorage.setItem(STORE_KEY, JSON.stringify(value));
-  else localStorage.removeItem(STORE_KEY);
+  if (value) safeSet(STORE_KEY, JSON.stringify(value));
+  else safeRemove(STORE_KEY);
 }
 
 /**
@@ -34,13 +40,26 @@ function writeMock(value) {
 export async function registerWithEmail({
   email, password, nickname, firstName, lastName, phone, notificationsEnabled, photoURL,
 }) {
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanEmail = normalizeEmail(email);
+  const cleanNick = normalizeNickname(nickname);
 
-  // Uniqueness checks
-  const nickTaken = await getUserByNickname(nickname);
-  if (nickTaken) throw new Error("Этот никнейм уже занят");
+  // Reject malformed input BEFORE hitting any network — defence in depth.
+  if (!isEmail(cleanEmail)) throw new Error(t.emailInvalid);
+  if (!isNickname(cleanNick)) throw new Error(t.registerErrNickname);
+  if (typeof password !== "string" ||
+      password.length < LIMITS.PASSWORD_MIN ||
+      password.length > LIMITS.PASSWORD_MAX) {
+    throw new Error(t.passwordWeak);
+  }
+
+  // Uniqueness checks. NOTE: there's a tiny TOCTOU window between checking
+  // and creating; Firebase Auth's own uniqueness on email closes the email
+  // race, and createUserWithEmailAndPassword will throw `auth/email-already-in-use`
+  // which the caller maps via prettyError().
+  const nickTaken = await getUserByNickname(cleanNick);
+  if (nickTaken) throw new Error(t.nicknameTaken);
   const emailTaken = await getUserByEmail(cleanEmail);
-  if (emailTaken) throw new Error("Этот email уже зарегистрирован");
+  if (emailTaken) throw new Error(t.emailAlreadyInUse);
 
   let uid;
   if (isFirebaseConfigured) {
@@ -53,10 +72,10 @@ export async function registerWithEmail({
   const profile = {
     id: uid,
     email: cleanEmail,
-    nickname,
-    firstName: firstName || "",
-    lastName: lastName || "",
-    phone: phone || "",
+    nickname: cleanNick,
+    firstName: (firstName || "").toString().trim().slice(0, 60),
+    lastName: (lastName || "").toString().trim().slice(0, 60),
+    phone: (phone || "").toString().trim().slice(0, 20),
     notificationsEnabled: Boolean(notificationsEnabled),
     photoURL: photoURL || "",
     role: "user",
@@ -78,17 +97,21 @@ export async function registerWithEmail({
  * When using Firebase, nickname is resolved to its email before calling signInWithEmailAndPassword.
  */
 export async function signInWithIdentifier({ identifier, password }) {
-  const id = identifier.trim();
-  const isEmail = id.includes("@");
-  const user = isEmail
-    ? await getUserByEmail(id)
-    : await getUserByNickname(id);
-  if (!user) throw new Error("Пользователь не найден");
+  const idRaw = (identifier || "").toString().trim();
+  if (!idRaw) throw new Error(t.registerErrEmail);
+  if (typeof password !== "string" || password.length === 0) {
+    throw new Error(t.loginErrorGeneric);
+  }
+  const looksLikeEmail = idRaw.includes("@");
+  const user = looksLikeEmail
+    ? await getUserByEmail(normalizeEmail(idRaw))
+    : await getUserByNickname(normalizeNickname(idRaw));
+  if (!user) throw new Error(t.loginErrorUserNotFound);
 
   if (isFirebaseConfigured) {
     await signInWithEmailAndPassword(auth, user.email, password);
   } else {
-    if (user.password !== password) throw new Error("Неверный пароль");
+    if (user.password !== password) throw new Error(t.loginErrorWrongPassword);
   }
   writeMock({ uid: user.id });
   return user;
@@ -96,7 +119,8 @@ export async function signInWithIdentifier({ identifier, password }) {
 
 export async function signOut() {
   if (isFirebaseConfigured) {
-    try { await fbSignOut(auth); } catch { /* ignore */ }
+    try { await fbSignOut(auth); }
+    catch (err) { logger.warn("auth.signOut", err?.message, { code: err?.code }); }
   }
   writeMock(null);
 }

@@ -32,7 +32,7 @@ import {
 export default function Settings() {
   const navigate     = useNavigate();
   const fileRef      = useRef(null);
-  const { user, updateProfile, signOut, switchRole } = useAuth();
+  const { user, updateProfile, signOut, switchView } = useAuth();
   const { community } = useCommunity();
   const { theme, setTheme } = useTheme();
   const { lang, setLang } = useLang();
@@ -161,14 +161,24 @@ export default function Settings() {
   }
 
   // ── Role switch ──────────────────────────────────────────────────────────────
+  const [roleSwitching, setRoleSwitching] = useState(false);
   async function trySwitchRole() {
-    if (user.role === "admin") {
-      const active = await getActiveBorrowingForUser(user.id);
-      if (active) { alert(t.returnBookFirst); return; }
-      await switchRole();
-      navigate("/", { replace: true });
-    } else {
-      navigate("/community/create");
+    if (roleSwitching || !user) return;
+    setRoleSwitching(true);
+    try {
+      if (user.role === "admin") {
+        const active = await getActiveBorrowingForUser(user.id).catch(() => null);
+        if (active) { alert(t.returnBookFirst); return; }
+        switchView();
+        navigate("/", { replace: true });
+      } else {
+        navigate("/community/create");
+      }
+    } catch (err) {
+      console.error("Role switch failed:", err);
+      alert(err?.message || t.error);
+    } finally {
+      setRoleSwitching(false);
     }
   }
 
