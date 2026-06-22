@@ -72,7 +72,7 @@ export default function Notification() {
                 <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </button>
-            <span className="flex-1 font-medium">{selected.size} выбрано</span>
+            <span className="flex-1 font-medium">{selected.size} {t.selectedCount}</span>
             <button onClick={bulkMarkRead} disabled={loading} className="icon-btn" aria-label="Mark read">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M3 7l9 7 9-7M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7"
@@ -96,14 +96,14 @@ export default function Notification() {
       {!selectMode && notifications.length > 0 ? (
         <div className="px-4 mt-1 flex justify-end">
           <button onClick={() => setSelectMode(true)} className="text-[13px] text-ink-500">
-            Выбрать
+            {t.selectNotifications}
           </button>
         </div>
       ) : null}
 
       <ul className="mt-2">
         {loading ? (
-          <li className="px-6 py-12 text-center text-ink-500">Загрузка...</li>
+          <li className="px-6 py-12 text-center text-ink-500">{t.loading}</li>
         ) : filtered.length === 0 ? (
           <li>
             <EmptyState

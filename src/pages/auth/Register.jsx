@@ -6,11 +6,13 @@ import { registerWithEmail, signInWithGoogle } from "../../firebase/auth.js";
 import { uploadImage } from "../../firebase/storage.js";
 import { getUserByNickname } from "../../firebase/firestore.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
-import { t } from "../../utils/i18n.js";
+import { useLang } from "../../contexts/LanguageContext.jsx";
+import { t, SUPPORTED_LANGS } from "../../utils/i18n.js";
 
 export default function Register() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
+  const { lang, setLang } = useLang();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     email: "",
@@ -21,6 +23,7 @@ export default function Register() {
     lastName: "",
     phone: "",
     notificationsEnabled: true,
+    acceptedTerms: false,
   });
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -84,24 +87,33 @@ export default function Register() {
     setError("");
 
     if (step === 1) {
-      if (!/^\S+@\S+\.\S+$/.test(form.email)) { setError("Корректный email жазыңыз"); return; }
-      if (form.password.length < 6) { setError("Құпия сөз кемінде 6 таңбадан тұруы тиіс"); return; }
-      if (form.password !== form.confirmPassword) { setError("Құпия сөздер сәйкес келмейді"); return; }
+      if (!/^\S+@\S+\.\S+$/.test(form.email)) { setError(t.registerErrEmail); return; }
+      if (form.password.length < 6) { setError(t.registerErrPasswordShort); return; }
+      if (form.password !== form.confirmPassword) { setError(t.registerErrPasswordMatch); return; }
     }
 
     if (step === 2) {
-      if (!form.nickname.trim()) { setError("Никнейм жазыңыз"); return; }
-      if (nickStatus === "taken") { setError("Бұл никнейм бос емес"); return; }
-      if (nickStatus === "checking") { setError("Никнейм тексерілуде, күте тұрыңыз…"); return; }
+      if (!form.nickname.trim()) { setError(t.registerErrNickname); return; }
+      if (nickStatus === "taken") { setError(t.nicknameTaken); return; }
+      if (nickStatus === "checking") { setError(t.registerErrCheckingNick); return; }
     }
 
     if (step < 3) { setStep(step + 1); return; }
+
+    if (!form.acceptedTerms) {
+      setError(t.registerMustAcceptTerms);
+      return;
+    }
 
     // Step 3 — submit
     await submit();
   }
 
   async function submit() {
+    if (!form.acceptedTerms) {
+      setError(t.registerMustAcceptTerms);
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -149,7 +161,29 @@ export default function Register() {
         {/* ── Step 1: Email & Password ── */}
         {step === 1 && (
           <>
-            <h2 className="text-xl font-bold mb-1">Email & құпия сөз</h2>
+            {/* Language picker — visible on the very first launch screen */}
+            <div className="mb-2">
+              <p className="text-[12px] text-ink-500 mb-1.5">{t.selectLanguage}</p>
+              <div className="flex gap-2">
+                {SUPPORTED_LANGS.map((l) => (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => setLang(l.code)}
+                    className={
+                      "flex-1 py-2 rounded-xl text-[13px] font-medium transition-colors " +
+                      (lang === l.code
+                        ? "bg-brand-500 text-white"
+                        : "bg-ink-100 text-ink-700")
+                    }
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <h2 className="text-xl font-bold mb-1">{t.registerEmailStepTitle}</h2>
 
             <label className="block">
               <span className="text-[13px] text-ink-500 mb-1 block">{t.email}</span>
@@ -169,7 +203,7 @@ export default function Register() {
                 type="password"
                 value={form.password}
                 onChange={(e) => update("password", e.target.value)}
-                placeholder="Кемінде 6 таңба"
+                placeholder={t.passwordMin}
                 autoComplete="new-password"
                 className="input"
               />
@@ -189,7 +223,7 @@ export default function Register() {
             {/* Divider */}
             <div className="flex items-center gap-3 py-1">
               <div className="flex-1 h-px bg-ink-200" />
-              <span className="text-[12px] text-ink-400">немесе</span>
+              <span className="text-[12px] text-ink-400">{t.or}</span>
               <div className="flex-1 h-px bg-ink-200" />
             </div>
 
@@ -201,11 +235,11 @@ export default function Register() {
               className="w-full flex items-center justify-center gap-3 py-3 rounded-2xl border border-ink-200 bg-surface text-ink-700 font-medium text-[14px] active:scale-[0.98] transition disabled:opacity-60"
             >
               <GoogleIcon />
-              {googleBusy ? "..." : "Google арқылы тіркелу"}
+              {googleBusy ? "..." : t.signUpWithGoogle}
             </button>
 
             <p className="text-center text-[14px] text-ink-500 pt-1">
-              Аккаунтыңыз бар ма?{" "}
+              {t.haveAccount}{" "}
               <Link to="/auth/login" className="text-brand-500 font-medium">{t.signIn}</Link>
             </p>
           </>
@@ -214,7 +248,7 @@ export default function Register() {
         {/* ── Step 2: Nickname, Name, Phone ── */}
         {step === 2 && (
           <>
-            <h2 className="text-xl font-bold mb-1">Профиль мәліметтері</h2>
+            <h2 className="text-xl font-bold mb-1">{t.registerProfileStepTitle}</h2>
 
             <label className="block">
               <span className="text-[13px] text-ink-500 mb-1 block">{t.nickname} *</span>
@@ -231,7 +265,7 @@ export default function Register() {
                   {nickStatus === "checking" && (
                     <>
                       <span className="w-3 h-3 rounded-full border-2 border-ink-300 border-t-transparent animate-spin" />
-                      <span className="text-[12px] text-ink-400">Тексерілуде…</span>
+                      <span className="text-[12px] text-ink-400">{t.registerNicknameChecking}</span>
                     </>
                   )}
                   {nickStatus === "available" && (
@@ -239,7 +273,7 @@ export default function Register() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                         <path d="M5 13l4 4L19 7" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      <span className="text-[12px] text-ok font-medium">@{form.nickname} — бос</span>
+                      <span className="text-[12px] text-ok font-medium">@{form.nickname} — {t.registerNicknameAvailable}</span>
                     </>
                   )}
                   {nickStatus === "taken" && (
@@ -247,7 +281,7 @@ export default function Register() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                         <path d="M18 6L6 18M6 6l12 12" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" />
                       </svg>
-                      <span className="text-[12px] text-bad font-medium">@{form.nickname} — бос емес</span>
+                      <span className="text-[12px] text-bad font-medium">@{form.nickname} — {t.registerNicknameTaken}</span>
                     </>
                   )}
                 </div>
@@ -260,7 +294,7 @@ export default function Register() {
                 <input
                   value={form.firstName}
                   onChange={(e) => update("firstName", e.target.value)}
-                  placeholder="Міндетті емес"
+                  placeholder={t.optional}
                   className="input"
                 />
               </label>
@@ -269,14 +303,14 @@ export default function Register() {
                 <input
                   value={form.lastName}
                   onChange={(e) => update("lastName", e.target.value)}
-                  placeholder="Міндетті емес"
+                  placeholder={t.optional}
                   className="input"
                 />
               </label>
             </div>
 
             <label className="block">
-              <span className="text-[13px] text-ink-500 mb-1 block">Телефон нөмірі</span>
+              <span className="text-[13px] text-ink-500 mb-1 block">{t.phone}</span>
               <input
                 type="tel"
                 value={form.phone}
@@ -303,7 +337,7 @@ export default function Register() {
         {step === 3 && (
           <>
             <h2 className="text-xl font-bold mb-1">{t.uploadPhoto}</h2>
-            <p className="text-[13px] text-ink-500 mb-3">Бұл қадамды өткізіп жіберуге болады</p>
+            <p className="text-[13px] text-ink-500 mb-3">{t.registerSkippable}</p>
 
             <input
               ref={photoInputRef}
@@ -326,14 +360,14 @@ export default function Register() {
                     onClick={() => photoInputRef.current?.click()}
                     className="px-3 py-1.5 rounded-xl bg-surface/90 text-[13px] font-medium text-ink-700 shadow"
                   >
-                    Өзгерту
+                    {t.changePhoto}
                   </button>
                   <button
                     type="button"
                     onClick={removePhoto}
                     className="px-3 py-1.5 rounded-xl bg-bad/90 text-[13px] font-medium text-white shadow"
                   >
-                    Жою
+                    {t.removePhoto}
                   </button>
                 </div>
               </div>
@@ -349,10 +383,33 @@ export default function Register() {
                   <circle cx="12" cy="12" r="11" fill="currentColor" opacity="0.12" />
                   <path d="M12 8v8M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                <span className="text-[14px] font-medium">Сурет таңдау</span>
-                <span className="text-[12px] text-brand-400">JPG, PNG, WEBP</span>
+                <span className="text-[14px] font-medium">{t.pickPhoto}</span>
+                <span className="text-[12px] text-brand-400">{t.pickPhotoHint}</span>
               </button>
             )}
+
+            {/* Terms of Use agreement — mandatory */}
+            <label className="flex items-start gap-3 pt-5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.acceptedTerms}
+                onChange={(e) => update("acceptedTerms", e.target.checked)}
+                className="w-5 h-5 mt-0.5 shrink-0 accent-brand-500"
+              />
+              <span className="text-[14px] leading-snug">
+                {t.registerAcceptTerms.split(t.registerAcceptTermsLink)[0]}
+                <a
+                  href="/drawable/TermsofUse.docx.pdf"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand-500 underline underline-offset-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t.registerAcceptTermsLink}
+                </a>
+                {t.registerAcceptTerms.split(t.registerAcceptTermsLink)[1] || ""}
+              </span>
+            </label>
           </>
         )}
 
@@ -363,8 +420,8 @@ export default function Register() {
       <div className="absolute bottom-4 left-0 right-0 px-6 space-y-2">
         <button
           onClick={next}
-          disabled={submitting}
-          className="btn-primary"
+          disabled={submitting || (step === 3 && !form.acceptedTerms)}
+          className="btn-primary disabled:opacity-60"
         >
           {submitting ? "..." : step === 3 ? t.signUp : t.next}
         </button>
@@ -372,10 +429,10 @@ export default function Register() {
         {step === 3 && !photoFile && (
           <button
             onClick={submit}
-            disabled={submitting}
-            className="w-full py-3 rounded-2xl text-[14px] font-semibold text-ink-500 bg-ink-100 active:scale-[0.99] transition"
+            disabled={submitting || !form.acceptedTerms}
+            className="w-full py-3 rounded-2xl text-[14px] font-semibold text-ink-500 bg-ink-100 active:scale-[0.99] transition disabled:opacity-60"
           >
-            {submitting ? "..." : "Суретсіз жалғастыру"}
+            {submitting ? "..." : t.continueWithoutPhoto}
           </button>
         )}
       </div>
@@ -396,10 +453,9 @@ function GoogleIcon() {
 
 function prettyError(err) {
   const code = err?.code || "";
-  if (code === "auth/email-already-in-use") return "Бұл email тіркелген";
-  if (code === "auth/invalid-email") return "Қате email";
-  if (code === "auth/weak-password") return "Құпия сөз тым қарапайым (кемінде 6 таңба)";
-  if (code === "auth/operation-not-allowed")
-    return "Email/Password sign-in выключен в Firebase. Откройте Firebase Console → Authentication → Sign-in method и включите его.";
-  return err?.message || "Тіркелу қатесі";
+  if (code === "auth/email-already-in-use") return t.emailAlreadyInUse;
+  if (code === "auth/invalid-email") return t.emailInvalid;
+  if (code === "auth/weak-password") return t.passwordWeak;
+  if (code === "auth/operation-not-allowed") return t.emailPasswordDisabled;
+  return err?.message || t.registerError;
 }

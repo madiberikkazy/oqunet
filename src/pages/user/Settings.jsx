@@ -19,7 +19,7 @@ import {
   createLeaveRequest, getPendingLeaveRequest, createNotification,
 } from "../../firebase/firestore.js";
 import { uploadImage } from "../../firebase/storage.js";
-import { t } from "../../utils/i18n.js";
+import { t, SUPPORTED_LANGS } from "../../utils/i18n.js";
 import { 
   NOTIFICATION_SOUNDS, 
   loadNotificationPreferences, 
@@ -61,7 +61,7 @@ export default function Settings() {
 
   async function enableBrowserNotifications() {
     if (!notificationsSupported) {
-      alert("Your browser does not support notifications");
+      alert(t.notificationsNotSupported);
       return;
     }
     const granted = await requestNotificationPermission();
@@ -83,7 +83,7 @@ export default function Settings() {
     if (saving) return;
     const nick = form.nickname.trim();
     if (!form.firstName.trim() || !form.lastName.trim() || !nick) {
-      setProfileMsg({ type: "err", text: "Барлық өрістерді толтырыңыз" });
+      setProfileMsg({ type: "err", text: t.fillAllFields });
       return;
     }
     setSaving(true);
@@ -113,7 +113,7 @@ export default function Settings() {
       setProfileMsg({ type: "ok", text: t.profileSaved });
       setTimeout(() => setProfileMsg(null), 3000);
     } catch (err) {
-      setProfileMsg({ type: "err", text: err?.message || "Ошибка" });
+      setProfileMsg({ type: "err", text: err?.message || t.error });
     } finally {
       setSaving(false);
     }
@@ -128,9 +128,9 @@ export default function Settings() {
 
   async function savePassword() {
     if (pwSaving) return;
-    if (!pw.current) { setPwMsg({ type: "err", text: t.currentPassword + " — " + "қажет" }); return; }
-    if (pw.next.length < 6) { setPwMsg({ type: "err", text: "Минимум 6 символов" }); return; }
-    if (pw.next !== pw.confirm) { setPwMsg({ type: "err", text: "Пароли не совпадают" }); return; }
+    if (!pw.current) { setPwMsg({ type: "err", text: `${t.currentPassword} — ${t.required}` }); return; }
+    if (pw.next.length < 6) { setPwMsg({ type: "err", text: t.passwordMinError }); return; }
+    if (pw.next !== pw.confirm) { setPwMsg({ type: "err", text: t.passwordsDoNotMatch }); return; }
 
     setPwSaving(true);
     setPwMsg(null);
@@ -153,7 +153,7 @@ export default function Settings() {
       if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
         setPwMsg({ type: "err", text: t.wrongPassword });
       } else {
-        setPwMsg({ type: "err", text: err?.message || "Ошибка" });
+        setPwMsg({ type: "err", text: err?.message || t.error });
       }
     } finally {
       setPwSaving(false);
@@ -263,7 +263,7 @@ export default function Settings() {
               </span>
               {/* "Change" badge */}
               <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-brand-500 text-white text-[10px] font-semibold whitespace-nowrap">
-                {t.uploadPhoto.split(" ").slice(0, 1)}
+                {t.uploadPhotoShort}
               </span>
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickPhoto} />
@@ -385,10 +385,7 @@ export default function Settings() {
           </SectionRow>
           <SectionRow label={t.language}>
             <PillGroup
-              options={[
-                { value: "kz", label: "Қазақша" },
-                { value: "ru", label: "Русский" },
-              ]}
+              options={SUPPORTED_LANGS.map((l) => ({ value: l.code, label: l.short }))}
               value={lang}
               onChange={setLang}
             />
@@ -420,7 +417,7 @@ export default function Settings() {
               {/* Sound Settings */}
               <div className="py-3 border-b border-ink-100">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[14px] text-ink-700">Дыбыс эффектілері</span>
+                  <span className="text-[14px] text-ink-700">{t.soundEffects}</span>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -434,7 +431,7 @@ export default function Settings() {
 
                 {notifPrefs.soundEnabled && (
                   <div>
-                    <label className="block text-[12px] text-ink-500 mb-2">Дыбыс түрін таңдаңыз</label>
+                    <label className="block text-[12px] text-ink-500 mb-2">{t.chooseSound}</label>
                     <select
                       value={notifPrefs.selectedSound}
                       onChange={(e) => updateNotifPref('selectedSound', e.target.value)}
@@ -455,13 +452,13 @@ export default function Settings() {
                 <div className="py-3 border-b border-ink-100">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <span className="text-[14px] text-ink-700">Браузер құлақтандырулары</span>
+                      <span className="text-[14px] text-ink-700">{t.browserNotifications}</span>
                       <p className="text-[12px] text-ink-500 mt-0.5">
-                        {notificationPermission === 'granted' 
-                          ? 'Рұқсат берілген' 
-                          : notificationPermission === 'denied' 
-                          ? 'Рұқсат құлыптаулы' 
-                          : 'Рұқсат сұралмаған'}
+                        {notificationPermission === 'granted'
+                          ? t.permissionGranted
+                          : notificationPermission === 'denied'
+                          ? t.permissionDenied
+                          : t.permissionDefault}
                       </p>
                     </div>
                     {notificationPermission === 'granted' ? (
@@ -479,7 +476,7 @@ export default function Settings() {
                         onClick={enableBrowserNotifications}
                         className="text-[13px] text-brand-500 font-medium px-3 py-1.5 rounded-lg bg-brand-500/10 hover:bg-brand-500/20 transition"
                       >
-                        Рұқсат өтінеу
+                        {t.requestPermission}
                       </button>
                     )}
                   </div>
@@ -508,12 +505,12 @@ export default function Settings() {
         {community && user?.role !== "admin" && (
           <>
             <section>
-              <h2 className="text-[17px] font-bold mb-1">Қоғамдастық</h2>
+              <h2 className="text-[17px] font-bold mb-1">{t.community}</h2>
               <p className="text-[13px] text-ink-500 mb-4">{community.name}</p>
 
               {leaveState === "pending" ? (
                 <div className="rounded-2xl bg-ink-100 px-4 py-3 text-[13px] text-ink-500 text-center">
-                  Өтінішіңіз жіберілді. Администратор жауабын күтіңіз…
+                  {t.leavePending}
                 </div>
               ) : (
                 <button
@@ -521,7 +518,7 @@ export default function Settings() {
                   disabled={leaveBusy}
                   className="w-full text-left rounded-xl bg-badSoft text-bad font-semibold py-3 px-4 disabled:opacity-60"
                 >
-                  {leaveBusy ? "…" : "Қоғамдастықтан шығу"}
+                  {leaveBusy ? "…" : t.leaveCommunity}
                 </button>
               )}
             </section>
@@ -531,7 +528,7 @@ export default function Settings() {
 
         {/* ══ PWA SETTINGS ═══════════════════════════════════════════════════════ */}
         <section>
-          <h2 className="text-[17px] font-bold mb-4">Приложение</h2>
+          <h2 className="text-[17px] font-bold mb-4">{t.appSection}</h2>
           <PWASettings />
         </section>
 
