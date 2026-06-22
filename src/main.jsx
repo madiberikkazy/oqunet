@@ -9,6 +9,10 @@ import { LanguageProvider } from "./contexts/LanguageContext.jsx";
 import { NotificationProvider } from "./contexts/NotificationContext.jsx";
 import "./index.css";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import { installGlobalErrorHandlers } from "./utils/logger.js";
+
+// Install before render so any error during boot is captured too.
+installGlobalErrorHandlers();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

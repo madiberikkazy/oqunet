@@ -138,6 +138,7 @@ export default function PickupBook() {
 
   async function onSubmit(e) {
     e.preventDefault();
+    if (submitting || !user?.id || !book) return; // double-tap + missing-prereq guard
     setError("");
     const enteredCode = digits.join("");
     if (enteredCode.length < 4) { setError("Введите 4-значный код"); return; }

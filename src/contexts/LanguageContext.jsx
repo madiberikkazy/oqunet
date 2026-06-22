@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { DEFAULT_LANG, getCurrentLang, isSupportedLang } from "../utils/i18n.js";
+import { safeSet } from "../utils/safeStorage.js";
 
 const LanguageContext = createContext({
   lang: DEFAULT_LANG,
@@ -19,11 +20,7 @@ export function LanguageProvider({ children }) {
 
   function setLang(newLang) {
     if (!isSupportedLang(newLang)) return;
-    try {
-      localStorage.setItem("lang", newLang);
-    } catch {
-      /* localStorage may be blocked in private mode */
-    }
+    safeSet("lang", newLang);
     setLangState(newLang);
   }
 

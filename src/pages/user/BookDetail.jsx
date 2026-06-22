@@ -13,6 +13,8 @@ import {
   updateBook, updateBorrowing, addRating,
 } from "../../firebase/firestore.js";
 import { t, genreLabel } from "../../utils/i18n.js";
+import { safeImageUrl } from "../../utils/validators.js";
+import { logger } from "../../utils/logger.js";
 
 function makeCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
@@ -52,8 +54,7 @@ export default function BookDetail() {
         console.log("BookDetail: Got book:", b);
         
         if (!b) {
-          console.log("BookDetail: Book not found");
-          setError("Кітап табылмады");
+          setError(t.bookNotFound);
           setLoading(false);
           return;
         }
@@ -145,8 +146,8 @@ export default function BookDetail() {
         console.log("BookDetail: Finished loading all data");
         setLoading(false);
       } catch (err) {
-        console.error("Error loading book detail:", err);
-        setError("Қателік: кітапты жүктеу мүмкін болмады");
+        logger.error("bookDetail.load", err?.message, { code: err?.code, bookId: id });
+        setError(t.loadFailed);
         setLoading(false);
       }
     })();
@@ -155,10 +156,16 @@ export default function BookDetail() {
   const saved = (user?.savedBookIds || []).includes(id);
 
   async function toggleSaved() {
-    const set = new Set(user.savedBookIds || []);
-    if (saved) set.delete(id); else set.add(id);
-    await updateUser(user.id, { savedBookIds: [...set] });
-    refresh();
+    if (!user?.id) return;
+    try {
+      const set = new Set(user.savedBookIds || []);
+      if (saved) set.delete(id); else set.add(id);
+      await updateUser(user.id, { savedBookIds: [...set] });
+      refresh();
+    } catch (err) {
+      logger.error("bookDetail.toggleSaved", err?.message, { code: err?.code, bookId: id });
+      // No user-facing toast for this micro-action — log only.
+    }
   }
 
   /**
@@ -172,11 +179,14 @@ export default function BookDetail() {
    */
   async function requestPickup() {
     if (!user || !book) return;
+    if (requesting) return; // double-tap guard
     // Safety: if a request already exists just navigate to pickup page
     if (pickupRequest) {
       navigate(`/books/${id}/pickup`);
       return;
     }
+    // Don't allow the current holder to "request" their own held book.
+    if (isCurrentHolder) return;
     setRequesting(true);
     try {
       if (book.status === "unavailable") {
@@ -228,7 +238,8 @@ export default function BookDetail() {
 
       navigate(`/books/${id}/pickup`);
     } catch (err) {
-      console.error(err);
+      logger.error("bookDetail.requestPickup", err?.message, { code: err?.code, bookId: id });
+      setError(err?.message || t.error);
     } finally {
       setRequesting(false);
     }
@@ -243,6 +254,15 @@ export default function BookDetail() {
 
   async function handleReturn(stars, reviewText) {
     if (!activeBorrowing || returning) return;
+    if (!user?.id) return;
+    // Only the actual borrower may return — extra defence vs. a tampered button.
+    if (activeBorrowing.borrowerId !== user.id) {
+      logger.warn("bookDetail.return", "non-borrower attempted return", {
+        bookId: id, borrowerId: activeBorrowing.borrowerId, userId: user.id,
+      });
+      setError(t.notAuthorized);
+      return;
+    }
     setReturning(true);
     setReturnModalOpen(false);
     try {
@@ -277,7 +297,8 @@ export default function BookDetail() {
       setBook({ ...book, status: "available", borrowerId: null, holderId: null });
       setDaysLeft(null);
     } catch (err) {
-      console.error(err);
+      logger.error("bookDetail.return", err?.message, { code: err?.code, bookId: id });
+      setError(err?.message || t.saveFailed);
     } finally {
       setReturning(false);
     }
@@ -325,7 +346,9 @@ export default function BookDetail() {
 
       <div className="px-4 pt-4 flex gap-3">
         <img
-          src={book.coverUrl} alt={book.name}
+          src={safeImageUrl(book.coverUrl) || undefined}
+          alt={book.name || ""}
+          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
           className="w-[110px] h-[145px] rounded-lg object-cover bg-ink-100"
         />
         <div className="flex-1 flex flex-col">
@@ -481,6 +504,15 @@ export default function BookDetail() {
           </div>
         </section>
       )}
+
+      {error && book ? (
+        <div className="px-4 mt-4">
+          <div className="rounded-xl bg-badSoft text-bad text-[13px] px-3 py-2 flex items-start justify-between gap-2">
+            <span className="flex-1 break-words">{error}</span>
+            <button onClick={() => setError(null)} className="text-bad/70 text-[16px] leading-none px-1">×</button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="px-4 mt-6 mb-2">
         {isAdminView ? (
