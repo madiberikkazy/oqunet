@@ -8,6 +8,9 @@ import {
   signOut as fbSignOut,
   GoogleAuthProvider,
   signInWithPopup,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  deleteUser,
 } from "firebase/auth";
 import { auth, isFirebaseConfigured } from "./config.js";
 import {
@@ -34,40 +37,159 @@ function writeMock(value) {
 }
 
 /**
- * Register a new user with email + password.
- * Creates a Firebase Auth user and a profile document in Firestore.
+ * Step 1 of registration — create the Firebase Auth account and send the
+ * verification email. We don't write the Firestore profile yet because the
+ * user still hasn't picked a nickname; the profile is created in
+ * `finalizeRegistration()` once they've verified their email and filled out
+ * the rest of the form.
+ *
+ * If the auth user already exists with the same password (i.e. the user is
+ * resuming a half-finished registration), we sign them in instead of
+ * surfacing `email-already-in-use` — but only if no Firestore profile has
+ * been written for that uid yet. A completed profile means the email is
+ * genuinely taken.
+ *
+ * Returns `{ uid, verified, mock }`.
+ *   mock=true when running without Firebase — verification is skipped.
  */
-export async function registerWithEmail({
-  email, password, nickname, firstName, lastName, phone, notificationsEnabled, photoURL,
-}) {
+export async function startEmailRegistration({ email, password }) {
   const cleanEmail = normalizeEmail(email);
-  const cleanNick = normalizeNickname(nickname);
-
-  // Reject malformed input BEFORE hitting any network — defence in depth.
   if (!isEmail(cleanEmail)) throw new Error(t.emailInvalid);
-  if (!isNickname(cleanNick)) throw new Error(t.registerErrNickname);
   if (typeof password !== "string" ||
       password.length < LIMITS.PASSWORD_MIN ||
       password.length > LIMITS.PASSWORD_MAX) {
     throw new Error(t.passwordWeak);
   }
 
-  // Uniqueness checks. NOTE: there's a tiny TOCTOU window between checking
-  // and creating; Firebase Auth's own uniqueness on email closes the email
-  // race, and createUserWithEmailAndPassword will throw `auth/email-already-in-use`
-  // which the caller maps via prettyError().
-  const nickTaken = await getUserByNickname(cleanNick);
-  if (nickTaken) throw new Error(t.nicknameTaken);
-  const emailTaken = await getUserByEmail(cleanEmail);
-  if (emailTaken) throw new Error(t.emailAlreadyInUse);
+  // If a fully-registered profile already exists, block immediately.
+  const existing = await getUserByEmail(cleanEmail);
+  if (existing) throw new Error(t.emailAlreadyInUse);
+
+  if (!isFirebaseConfigured) {
+    // Mock mode: pretend we sent a verification email; auto-pass.
+    return { uid: "mock-" + cleanEmail, verified: true, mock: true };
+  }
 
   let uid;
-  if (isFirebaseConfigured) {
+  try {
     const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
     uid = cred.user.uid;
-  } else {
-    uid = "mock-" + cleanEmail;
+    try {
+      await sendEmailVerification(cred.user);
+    } catch (verErr) {
+      logger.warn("auth.sendVerification", verErr?.message, { code: verErr?.code });
+      // Don't fail the whole flow — the user can still tap "Resend" later.
+    }
+  } catch (err) {
+    // Allow resume: if the auth account exists but no profile was ever written,
+    // sign in to it with the supplied password.
+    if (err?.code === "auth/email-already-in-use") {
+      try {
+        const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+        uid = cred.user.uid;
+        const profile = await getUserById(uid);
+        if (profile) {
+          // Profile already exists — registration was completed before. Stop.
+          throw new Error(t.emailAlreadyInUse);
+        }
+        if (!cred.user.emailVerified) {
+          try { await sendEmailVerification(cred.user); }
+          catch (verErr) { logger.warn("auth.sendVerification.resume", verErr?.message, { code: verErr?.code }); }
+        }
+      } catch (signInErr) {
+        // Pass through the t.emailAlreadyInUse error from above unchanged.
+        if (signInErr?.message === t.emailAlreadyInUse) throw signInErr;
+        // Wrong password for an existing auth account → tell the user.
+        if (signInErr?.code === "auth/wrong-password" || signInErr?.code === "auth/invalid-credential") {
+          throw new Error(t.emailAlreadyInUse);
+        }
+        throw signInErr;
+      }
+    } else {
+      throw err;
+    }
   }
+
+  const fbUser = auth?.currentUser || null;
+  return { uid, verified: !!fbUser?.emailVerified, mock: false };
+}
+
+/**
+ * Re-fetch the current Firebase user and return whether their email is now verified.
+ * Called by the "I clicked the link" button on the verification gate screen.
+ */
+export async function refreshEmailVerified() {
+  if (!isFirebaseConfigured) return true;
+  const u = auth?.currentUser;
+  if (!u) return false;
+  try {
+    await u.reload();
+    return !!auth.currentUser?.emailVerified;
+  } catch (err) {
+    logger.warn("auth.refreshVerified", err?.message, { code: err?.code });
+    return false;
+  }
+}
+
+/** Resend the verification email to the currently-pending auth user. */
+export async function resendVerificationEmail() {
+  if (!isFirebaseConfigured) return;
+  const u = auth?.currentUser;
+  if (!u) throw new Error(t.sessionExpired);
+  if (u.emailVerified) return;
+  await sendEmailVerification(u);
+}
+
+/**
+ * Send a Firebase password-reset email. Always resolves successfully (we
+ * intentionally don't reveal whether the email is registered, so we can't
+ * be used as an account-enumeration oracle).
+ */
+export async function sendPasswordReset(email) {
+  const cleanEmail = normalizeEmail(email);
+  if (!isEmail(cleanEmail)) throw new Error(t.emailInvalid);
+  if (!isFirebaseConfigured) {
+    // Mock mode: nothing to send. Pretend it worked so the UX is consistent.
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, cleanEmail);
+  } catch (err) {
+    // Treat "user-not-found" as a non-error to avoid leaking which emails exist.
+    if (err?.code === "auth/user-not-found") return;
+    logger.warn("auth.passwordReset", err?.message, { code: err?.code });
+    throw err;
+  }
+}
+
+/**
+ * Step 2 of registration — write the Firestore profile for an already-created
+ * (and verified) auth user. Requires `uid` returned from startEmailRegistration().
+ */
+export async function finalizeRegistration({
+  uid, email, password, nickname, firstName, lastName, phone, notificationsEnabled, photoURL,
+}) {
+  const cleanEmail = normalizeEmail(email);
+  const cleanNick = normalizeNickname(nickname);
+
+  if (!uid) throw new Error(t.sessionExpired);
+  if (!isEmail(cleanEmail)) throw new Error(t.emailInvalid);
+  if (!isNickname(cleanNick)) throw new Error(t.registerErrNickname);
+
+  // Verification must have completed for real Firebase users.
+  if (isFirebaseConfigured) {
+    const u = auth?.currentUser;
+    if (!u) throw new Error(t.sessionExpired);
+    // Reload one final time to defend against a stale flag.
+    try { await u.reload(); } catch { /* network blips don't block — flag check below is authoritative */ }
+    if (!auth.currentUser?.emailVerified) {
+      throw new Error(t.emailNotVerified);
+    }
+  }
+
+  // Nickname uniqueness — checked at finalize time too, not just at the picker.
+  const nickTaken = await getUserByNickname(cleanNick);
+  if (nickTaken) throw new Error(t.nicknameTaken);
 
   const profile = {
     id: uid,
@@ -82,14 +204,40 @@ export async function registerWithEmail({
     communityId: null,
     createdAt: Date.now(),
   };
-  // Password is only stored in the local mock layer (so nickname-login can verify).
-  // When Firebase is configured we let Firebase Auth handle credentials.
   if (!isFirebaseConfigured) {
+    // Mock-only: keep the password for nickname-login support.
     profile.password = password;
   }
   await createUserDoc(profile);
   writeMock({ uid });
   return profile;
+}
+
+/**
+ * Back-compat wrapper — runs both phases sequentially. Kept so any callers
+ * outside the new Register flow keep working. New code should use
+ * startEmailRegistration() + finalizeRegistration().
+ */
+export async function registerWithEmail(payload) {
+  const start = await startEmailRegistration({ email: payload.email, password: payload.password });
+  if (isFirebaseConfigured && !start.verified) {
+    // Cannot finalize without verification.
+    throw new Error(t.emailNotVerified);
+  }
+  return finalizeRegistration({ ...payload, uid: start.uid });
+}
+
+/**
+ * Cancel a half-finished registration: deletes the auth user we created in
+ * startEmailRegistration() so the email becomes available again if the user
+ * gives up before verifying.
+ */
+export async function cancelPendingRegistration() {
+  if (!isFirebaseConfigured) return;
+  const u = auth?.currentUser;
+  if (!u || u.emailVerified) return;
+  try { await deleteUser(u); }
+  catch (err) { logger.warn("auth.cancelPending", err?.message, { code: err?.code }); }
 }
 
 /**
