@@ -10,7 +10,7 @@ import {
   getBook, getUserById, listRatingsForBook, listReviewsForBook, updateUser,
   getPickupRequest, createPickupRequest,
   getActiveBorrowingByBook, getLastCompletedBorrowingByBook, createNotification,
-  updateBook, updateBorrowing,
+  updateBook, updateBorrowing, addRating,
 } from "../../firebase/firestore.js";
 import { t, genreLabel } from "../../utils/i18n.js";
 
@@ -34,6 +34,12 @@ export default function BookDetail() {
   const [error, setError]           = useState(null);
   const [daysLeft, setDaysLeft]     = useState(null);
   const [borrowingMaxDays, setBorrowingMaxDays] = useState(null);
+  const [activeBorrowing, setActiveBorrowing] = useState(null);
+  const [returning, setReturning]   = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnStars, setReturnStars] = useState(0);
+  const [returnHovered, setReturnHovered] = useState(0);
+  const [returnReview, setReturnReview] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -83,6 +89,7 @@ export default function BookDetail() {
           try {
             const borrowing = await getActiveBorrowingByBook(id);
             if (borrowing) {
+              setActiveBorrowing(borrowing);
               // Compute days left
               if (borrowing.returnDate) {
                 const retTs = typeof borrowing.returnDate === "number"
@@ -227,6 +234,55 @@ export default function BookDetail() {
     }
   }
 
+  function openReturnModal() {
+    setReturnStars(0);
+    setReturnHovered(0);
+    setReturnReview("");
+    setReturnModalOpen(true);
+  }
+
+  async function handleReturn(stars, reviewText) {
+    if (!activeBorrowing || returning) return;
+    setReturning(true);
+    setReturnModalOpen(false);
+    try {
+      const now = Date.now();
+      if (stars > 0) {
+        await addRating({
+          bookId: id,
+          userId: user.id,
+          stars,
+          value: stars,
+          review: (reviewText || "").trim(),
+          createdAt: now,
+        });
+      }
+      await updateBorrowing(activeBorrowing.id, {
+        status: "completed",
+        returnDate: now,
+        rating: stars || 0,
+      });
+      await updateBook(id, { status: "available", borrowerId: null, holderId: null });
+      if (book.ownerId && book.ownerId !== user.id) {
+        await createNotification({
+          recipientId: book.ownerId,
+          title: "Кітап қайтарылды",
+          body: `${user.firstName} ${user.lastName} сіздің «${book.name}» кітабыңызды қайтарды.`,
+          read: false,
+          type: "book-returned",
+          bookId: id,
+        });
+      }
+      setActiveBorrowing(null);
+      setBook({ ...book, status: "available", borrowerId: null, holderId: null });
+      setDaysLeft(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReturning(false);
+    }
+  }
+
   if (loading) {
     return (
       <MobileShell>
@@ -258,6 +314,10 @@ export default function BookDetail() {
 
   const isAdminView = viewRole === "admin";
   const isOwner     = book.ownerId === user?.id;
+  const isCurrentHolder =
+    book.status === "unavailable" &&
+    !!user?.id &&
+    (activeBorrowing?.borrowerId === user.id || book.borrowerId === user.id);
 
   return (
     <MobileShell>
@@ -359,14 +419,17 @@ export default function BookDetail() {
         )}
       </section>
 
-      {/* Owner — who added the book, never changes */}
-      {owner && owner.id !== user?.id && (
+      {/* Owner — who added the book, never changes. Shown to all users. */}
+      {owner && (
         <section className="px-4 mt-5">
           <h3 className="section-title mb-2">Иесі</h3>
           <Link to={`/users/${owner.id}`} className="card flex items-center gap-3 px-3 py-3">
             <Avatar src={owner.photoURL} name={`${owner.firstName} ${owner.lastName}`} />
             <div className="flex-1">
-              <p className="font-medium">{owner.firstName} {owner.lastName}</p>
+              <p className="font-medium">
+                {owner.firstName} {owner.lastName}
+                {owner.id === user?.id ? <span className="text-[12px] text-ink-500 ml-1">(сіз)</span> : null}
+              </p>
               <p className="text-[13px] text-ink-500">@{owner.nickname}</p>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-ink-300">
@@ -376,21 +439,22 @@ export default function BookDetail() {
         </section>
       )}
 
-      {/* Holder — who physically has the book right now */}
+      {/* Holder — who physically has the book right now. Shown to all users. */}
       {(() => {
         // available → owner is the holder (book not lent out)
         // unavailable → currentHolder (active borrower)
         const holder = book.status === "unavailable" ? currentHolder : owner;
-        if (!holder || holder.id === user?.id) return null;
-        // Don't repeat if holder === owner and we already showed owner above
-        if (book.status === "available" && owner && holder.id === owner.id) return null;
+        if (!holder) return null;
         return (
           <section className="px-4 mt-5">
             <h3 className="section-title mb-2">Ұстаушы</h3>
             <Link to={`/users/${holder.id}`} className="card flex items-center gap-3 px-3 py-3">
               <Avatar src={holder.photoURL} name={`${holder.firstName} ${holder.lastName}`} />
               <div className="flex-1">
-                <p className="font-medium">{holder.firstName} {holder.lastName}</p>
+                <p className="font-medium">
+                  {holder.firstName} {holder.lastName}
+                  {holder.id === user?.id ? <span className="text-[12px] text-ink-500 ml-1">(сіз)</span> : null}
+                </p>
                 <p className="text-[13px] text-ink-500">@{holder.nickname}</p>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-ink-300">
@@ -401,11 +465,42 @@ export default function BookDetail() {
         );
       })()}
 
+      {/* Return date — visible to all users when the book is borrowed */}
+      {book.status === "unavailable" && activeBorrowing?.returnDate && (
+        <section className="px-4 mt-5">
+          <h3 className="section-title mb-2">Қайтару күні</h3>
+          <div className="card px-4 py-3 flex items-center justify-between">
+            <span className="text-[14px] text-ink-700">Кітапты қайтару мерзімі</span>
+            <span className="font-semibold text-[14px]">
+              {new Date(
+                typeof activeBorrowing.returnDate === "number"
+                  ? activeBorrowing.returnDate
+                  : activeBorrowing.returnDate?.toMillis?.() ?? activeBorrowing.returnDate
+              ).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" })}
+            </span>
+          </div>
+        </section>
+      )}
+
       <div className="px-4 mt-6 mb-2">
         {isAdminView ? (
           <p className="text-center text-[13px] text-ink-500 py-3 bg-ink-100 rounded-xl">
             Администраторы не могут брать книги. Переключитесь в режим пользователя.
           </p>
+        ) : isCurrentHolder ? (
+          /* Current borrower — can return, cannot get again */
+          <div className="space-y-2">
+            <button
+              onClick={openReturnModal}
+              disabled={returning}
+              className="w-full py-3.5 rounded-2xl bg-ok text-white font-semibold text-[15px] active:scale-[0.99] transition disabled:opacity-60"
+            >
+              {returning ? "…" : "Кітапты қайтару"}
+            </button>
+            <p className="text-[12px] text-ink-500 text-center">
+              Бұл кітап қазір сізде. Оны қайтармайынша қайта ала алмайсыз.
+            </p>
+          </div>
         ) : isOwner ? (
           <p className="text-center text-[13px] text-ink-500 py-3 bg-ink-100 rounded-xl">
             Это ваша книга.
@@ -441,6 +536,69 @@ export default function BookDetail() {
           </button>
         )}
       </div>
+
+      {/* Return rating modal */}
+      {returnModalOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setReturnModalOpen(false)}
+          />
+          <div className="relative bg-surface rounded-t-3xl px-6 pt-5 pb-10 space-y-5">
+            <div className="w-10 h-1 rounded-full bg-ink-200 mx-auto" />
+            <div className="text-center">
+              <h2 className="text-[18px] font-bold">Кітапты бағалаңыз</h2>
+              <p className="text-[13px] text-ink-500 mt-1">«{book.name}»</p>
+            </div>
+            <div className="flex justify-center gap-3">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setReturnStars(s)}
+                  onMouseEnter={() => setReturnHovered(s)}
+                  onMouseLeave={() => setReturnHovered(0)}
+                  className="transition active:scale-90"
+                >
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                      fill={(returnHovered || returnStars) >= s ? "#F59E0B" : "none"}
+                      stroke={(returnHovered || returnStars) >= s ? "#F59E0B" : "currentColor"}
+                      strokeWidth="1.6"
+                      strokeLinejoin="round"
+                      className={(returnHovered || returnStars) >= s ? "" : "text-ink-300"}
+                    />
+                  </svg>
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={returnReview}
+              onChange={(e) => setReturnReview(e.target.value)}
+              placeholder="Пікіріңізді жазыңыз (міндетті емес)"
+              rows={3}
+              className="input resize-none text-[14px]"
+            />
+            <div className="space-y-2">
+              <button
+                onClick={() => handleReturn(returnStars, returnReview)}
+                disabled={returning}
+                className="btn-primary"
+              >
+                {returning ? "…" : returnStars > 0 ? "Бағалап қайтару" : "Қайтару"}
+              </button>
+              <button
+                onClick={() => handleReturn(0, "")}
+                disabled={returning}
+                className="w-full py-3 text-[14px] text-ink-500 font-medium"
+              >
+                Бағаламай қайтару
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileShell>
   );
 }

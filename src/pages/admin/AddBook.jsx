@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import Stepper from "../../components/Stepper.jsx";
 import SearchBar from "../../components/SearchBar.jsx";
-import { listUsersByCommunity, createBook } from "../../firebase/firestore.js";
+import { listUsersByCommunity, createBook, createNotification } from "../../firebase/firestore.js";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { t, GENRES } from "../../utils/i18n.js";
 
@@ -46,6 +46,26 @@ export default function AddBook() {
       const book = await createBook({
         ...form, genre: form.genres[0], communityId: community.id, status: "available", createdAt: Date.now(),
       });
+
+      // Notify every community member that a new book has been added.
+      try {
+        const recipients = members.filter((m) => m.id && m.id !== form.ownerId);
+        await Promise.all(
+          recipients.map((m) =>
+            createNotification({
+              recipientId: m.id,
+              title: "Жаңа кітап қосылды",
+              body: `«${book.name}» — ${book.author}. Қазір қолжетімді.`,
+              read: false,
+              type: "new-book",
+              bookId: book.id,
+            })
+          )
+        );
+      } catch (notifyErr) {
+        console.error("Failed to notify members about new book:", notifyErr);
+      }
+
       navigate(`/books/${book.id}`, { replace: true });
     } catch (err) {
       setError(err?.message || "Кітап құру қатесі");
