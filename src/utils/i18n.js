@@ -51,6 +51,7 @@ const kz = {
   emailNotVerified: "Email әлі расталмаған. Сілтемеге өтіңіз де, қайта көріңіз.",
   changeEmail: "Email-ді өзгерту",
   verificationSending: "Жіберілуде...",
+  checkSpamFolder: "Хат көрінбесе — Спам/Қалдық қалтасын тексеріңіз.",
   // Forgot password flow
   forgotPassword: "Құпия сөзді ұмыттыңыз ба?",
   resetPasswordTitle: "Құпия сөзді қалпына келтіру",
@@ -314,6 +315,7 @@ const ru = {
   emailNotVerified: "Email ещё не подтверждён. Перейдите по ссылке и попробуйте снова.",
   changeEmail: "Изменить email",
   verificationSending: "Отправляем...",
+  checkSpamFolder: "Если письма нет — загляните в папку Спам / Промоакции.",
   forgotPassword: "Забыли пароль?",
   resetPasswordTitle: "Восстановление пароля",
   resetPasswordBody: "Введите email — мы пришлём ссылку для сброса пароля.",
@@ -576,6 +578,7 @@ const en = {
   emailNotVerified: "Email is not verified yet. Click the link in the email and try again.",
   changeEmail: "Change email",
   verificationSending: "Sending...",
+  checkSpamFolder: "Don't see it? Check your Spam / Promotions folder.",
   forgotPassword: "Forgot password?",
   resetPasswordTitle: "Reset password",
   resetPasswordBody: "Enter your email and we'll send you a reset link.",
