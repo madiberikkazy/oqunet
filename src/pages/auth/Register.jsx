@@ -118,6 +118,9 @@ export default function Register() {
           setStep(2);
         } else {
           setVerifyState({ uid: result.uid });
+          // If Firebase accepted the account but rejected the verification-email send,
+          // tell the user up front rather than letting them stare at a quiet inbox.
+          if (result?.sendError) setError(result.sendError);
         }
       } catch (err) {
         logger.warn("register.startEmail", err?.message, { code: err?.code });
@@ -271,6 +274,14 @@ export default function Register() {
             <p className="text-[13px] text-ink-500 text-center mt-1">{t.verifyEmailBody}</p>
             <p className="text-[14px] font-semibold text-center break-all mt-1">{form.email}</p>
             <p className="text-[13px] text-ink-500 text-center mt-3 leading-snug">{t.verifyEmailHint}</p>
+            <p className="text-[12px] text-ink-400 text-center mt-2">{t.checkSpamFolder}</p>
+
+            {/* Surface any error from the send attempt right on the gate. */}
+            {error ? (
+              <div className="mt-4 rounded-xl bg-badSoft text-bad text-[13px] px-3 py-2 break-words">
+                {error}
+              </div>
+            ) : null}
 
             <div className="mt-6 space-y-2">
               <button
@@ -549,7 +560,7 @@ export default function Register() {
           </>
         )}
 
-        {error && <p className="text-bad text-[13px]">{error}</p>}
+        {error && !onVerifyGate ? <p className="text-bad text-[13px]">{error}</p> : null}
       </div>
 
       {/* Fixed bottom button */}

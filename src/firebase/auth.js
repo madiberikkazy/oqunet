@@ -71,14 +71,15 @@ export async function startEmailRegistration({ email, password }) {
   }
 
   let uid;
+  let sendErr = null; // surface this to the UI so the user knows what went wrong
   try {
     const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
     uid = cred.user.uid;
     try {
       await sendEmailVerification(cred.user);
     } catch (verErr) {
-      logger.warn("auth.sendVerification", verErr?.message, { code: verErr?.code });
-      // Don't fail the whole flow — the user can still tap "Resend" later.
+      sendErr = verErr;
+      logger.error("auth.sendVerification", verErr?.message, { code: verErr?.code });
     }
   } catch (err) {
     // Allow resume: if the auth account exists but no profile was ever written,
@@ -94,12 +95,13 @@ export async function startEmailRegistration({ email, password }) {
         }
         if (!cred.user.emailVerified) {
           try { await sendEmailVerification(cred.user); }
-          catch (verErr) { logger.warn("auth.sendVerification.resume", verErr?.message, { code: verErr?.code }); }
+          catch (verErr) {
+            sendErr = verErr;
+            logger.error("auth.sendVerification.resume", verErr?.message, { code: verErr?.code });
+          }
         }
       } catch (signInErr) {
-        // Pass through the t.emailAlreadyInUse error from above unchanged.
         if (signInErr?.message === t.emailAlreadyInUse) throw signInErr;
-        // Wrong password for an existing auth account → tell the user.
         if (signInErr?.code === "auth/wrong-password" || signInErr?.code === "auth/invalid-credential") {
           throw new Error(t.emailAlreadyInUse);
         }
@@ -111,7 +113,23 @@ export async function startEmailRegistration({ email, password }) {
   }
 
   const fbUser = auth?.currentUser || null;
-  return { uid, verified: !!fbUser?.emailVerified, mock: false };
+  return {
+    uid,
+    verified: !!fbUser?.emailVerified,
+    mock: false,
+    // null when the verification email was accepted by Firebase, otherwise
+    // a short user-friendly diagnostic the UI can show on the gate screen.
+    sendError: sendErr ? humanizeSendError(sendErr) : null,
+  };
+}
+
+function humanizeSendError(err) {
+  const code = err?.code || "";
+  if (code === "auth/too-many-requests") return t.loginErrorTooMany;
+  if (code === "auth/operation-not-allowed") return t.emailPasswordDisabled;
+  if (code === "auth/network-request-failed") return t.offlineWarning;
+  if (code === "auth/invalid-recipient-email") return t.emailInvalid;
+  return err?.message || t.resetPasswordError;
 }
 
 /**
@@ -137,7 +155,12 @@ export async function resendVerificationEmail() {
   const u = auth?.currentUser;
   if (!u) throw new Error(t.sessionExpired);
   if (u.emailVerified) return;
-  await sendEmailVerification(u);
+  try {
+    await sendEmailVerification(u);
+  } catch (err) {
+    logger.error("auth.resendVerification", err?.message, { code: err?.code });
+    throw new Error(humanizeSendError(err));
+  }
 }
 
 /**
