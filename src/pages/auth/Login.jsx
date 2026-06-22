@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
-import { signInWithIdentifier, signInWithGoogle } from "../../firebase/auth.js";
+import { signInWithIdentifier, signInWithGoogle, sendPasswordReset } from "../../firebase/auth.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { t } from "../../utils/i18n.js";
+import { isEmail } from "../../utils/validators.js";
+import { logger } from "../../utils/logger.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -12,6 +14,40 @@ export default function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+
+  // Forgot-password modal state
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetBusy, setResetBusy]   = useState(false);
+  const [resetMsg, setResetMsg]     = useState(null); // { type: 'ok'|'err', text }
+
+  function openReset() {
+    setResetMsg(null);
+    // Pre-fill if the identifier in the form is already an email.
+    setResetEmail(form.identifier && isEmail(form.identifier.trim()) ? form.identifier.trim() : "");
+    setResetOpen(true);
+  }
+
+  async function submitReset(e) {
+    e?.preventDefault?.();
+    if (resetBusy) return;
+    setResetMsg(null);
+    if (!isEmail(resetEmail)) {
+      setResetMsg({ type: "err", text: t.emailInvalid });
+      return;
+    }
+    setResetBusy(true);
+    try {
+      await sendPasswordReset(resetEmail);
+      // Intentionally ambiguous — don't reveal whether the email exists.
+      setResetMsg({ type: "ok", text: t.resetPasswordSent });
+    } catch (err) {
+      logger.warn("login.resetPassword", err?.message, { code: err?.code });
+      setResetMsg({ type: "err", text: err?.message || t.resetPasswordError });
+    } finally {
+      setResetBusy(false);
+    }
+  }
 
   async function onGoogle() {
     setError("");
@@ -77,6 +113,17 @@ export default function Login() {
           />
         </label>
 
+        {/* Forgot password */}
+        <div className="flex justify-end -mt-1">
+          <button
+            type="button"
+            onClick={openReset}
+            className="text-[12px] text-brand-500 font-medium hover:underline underline-offset-2"
+          >
+            {t.forgotPassword}
+          </button>
+        </div>
+
         {error ? <p className="text-bad text-[13px]">{error}</p> : null}
 
         <button type="submit" disabled={submitting} className="btn-primary mt-1">
@@ -106,6 +153,63 @@ export default function Login() {
           <Link to="/auth/register" className="text-brand-500 font-medium">{t.signUp}</Link>
         </p>
       </form>
+
+      {/* ── Forgot-password bottom sheet ── */}
+      {resetOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !resetBusy && setResetOpen(false)}
+          />
+          <form
+            onSubmit={submitReset}
+            className="relative bg-surface rounded-t-3xl px-6 pt-5 pb-10 space-y-4"
+          >
+            <div className="w-10 h-1 rounded-full bg-ink-200 mx-auto" />
+            <div className="text-center">
+              <h2 className="text-[18px] font-bold">{t.resetPasswordTitle}</h2>
+              <p className="text-[13px] text-ink-500 mt-1">{t.resetPasswordBody}</p>
+            </div>
+
+            <label className="block">
+              <span className="text-[12px] text-ink-500 mb-1 block">{t.email}</span>
+              <input
+                type="email"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="input"
+                autoFocus
+              />
+            </label>
+
+            {resetMsg ? (
+              <p className={"text-[13px] " + (resetMsg.type === "ok" ? "text-ok" : "text-bad")}>
+                {resetMsg.text}
+              </p>
+            ) : null}
+
+            <div className="space-y-2">
+              <button
+                type="submit"
+                disabled={resetBusy}
+                className="btn-primary disabled:opacity-60"
+              >
+                {resetBusy ? "..." : t.resetPasswordSend}
+              </button>
+              <button
+                type="button"
+                onClick={() => !resetBusy && setResetOpen(false)}
+                disabled={resetBusy}
+                className="w-full py-3 text-[14px] text-ink-500 font-medium"
+              >
+                {t.cancel}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </MobileShell>
   );
 }

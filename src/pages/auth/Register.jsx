@@ -2,7 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import Stepper from "../../components/Stepper.jsx";
-import { registerWithEmail, signInWithGoogle } from "../../firebase/auth.js";
+import {
+  startEmailRegistration,
+  finalizeRegistration,
+  refreshEmailVerified,
+  resendVerificationEmail,
+  cancelPendingRegistration,
+  signInWithGoogle,
+} from "../../firebase/auth.js";
+import { logger } from "../../utils/logger.js";
 import { uploadImage } from "../../firebase/storage.js";
 import { getUserByNickname } from "../../firebase/firestore.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -30,6 +38,12 @@ export default function Register() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+
+  // Email-verification gate state
+  const [verifyState, setVerifyState] = useState(null); // null | { uid }
+  const [verifyBusy, setVerifyBusy]   = useState(false);
+  const [resendBusy, setResendBusy]   = useState(false);
+  const [resendOk, setResendOk]       = useState(false);
 
   // Live nickname availability
   const [nickStatus, setNickStatus] = useState(null); // null | "checking" | "available" | "taken"
@@ -84,12 +98,34 @@ export default function Register() {
   }
 
   async function next() {
+    if (submitting || verifyBusy) return;
     setError("");
 
     if (step === 1) {
       if (!/^\S+@\S+\.\S+$/.test(form.email)) { setError(t.registerErrEmail); return; }
       if (form.password.length < 6) { setError(t.registerErrPasswordShort); return; }
       if (form.password !== form.confirmPassword) { setError(t.registerErrPasswordMatch); return; }
+      // Kick off auth creation + verification email, then show the gate.
+      setSubmitting(true);
+      try {
+        const result = await startEmailRegistration({
+          email: form.email,
+          password: form.password,
+        });
+        if (result?.verified) {
+          // Either mock mode or some flow returned an already-verified user.
+          setVerifyState({ uid: result.uid });
+          setStep(2);
+        } else {
+          setVerifyState({ uid: result.uid });
+        }
+      } catch (err) {
+        logger.warn("register.startEmail", err?.message, { code: err?.code });
+        setError(prettyError(err));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
     }
 
     if (step === 2) {
@@ -109,9 +145,65 @@ export default function Register() {
     await submit();
   }
 
+  /** Verification gate: poll Firebase for emailVerified and advance to Step 2 if true. */
+  async function checkVerified() {
+    if (verifyBusy) return;
+    setVerifyBusy(true);
+    setError("");
+    try {
+      const ok = await refreshEmailVerified();
+      if (ok) {
+        setStep(2);
+      } else {
+        setError(t.emailNotVerified);
+      }
+    } catch (err) {
+      logger.warn("register.checkVerified", err?.message, { code: err?.code });
+      setError(prettyError(err));
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
+  async function handleResend() {
+    if (resendBusy) return;
+    setResendBusy(true);
+    setResendOk(false);
+    setError("");
+    try {
+      await resendVerificationEmail();
+      setResendOk(true);
+    } catch (err) {
+      logger.warn("register.resendVerify", err?.message, { code: err?.code });
+      setError(prettyError(err));
+    } finally {
+      setResendBusy(false);
+    }
+  }
+
+  /** "Change email" — discard the half-created auth user and go back to Step 1. */
+  async function handleChangeEmail() {
+    if (verifyBusy || submitting) return;
+    setVerifyBusy(true);
+    try {
+      await cancelPendingRegistration();
+    } catch (err) {
+      logger.warn("register.cancelPending", err?.message, { code: err?.code });
+    } finally {
+      setVerifyState(null);
+      setResendOk(false);
+      setError("");
+      setVerifyBusy(false);
+    }
+  }
+
   async function submit() {
     if (!form.acceptedTerms) {
       setError(t.registerMustAcceptTerms);
+      return;
+    }
+    if (!verifyState?.uid) {
+      setError(t.sessionExpired);
       return;
     }
     setSubmitting(true);
@@ -121,7 +213,8 @@ export default function Register() {
       if (photoFile) {
         photoURL = await uploadImage(photoFile, `avatars/${form.email}_${Date.now()}`);
       }
-      const profile = await registerWithEmail({
+      const profile = await finalizeRegistration({
+        uid: verifyState.uid,
         email: form.email,
         password: form.password,
         nickname: form.nickname,
@@ -134,19 +227,26 @@ export default function Register() {
       setUser(profile);
       navigate("/", { replace: true });
     } catch (err) {
+      logger.error("register.finalize", err?.message, { code: err?.code });
       setError(prettyError(err));
     } finally {
       setSubmitting(false);
     }
   }
 
+  const onVerifyGate = step === 1 && !!verifyState;
+
   return (
     <MobileShell withNav={false}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4">
         <button
-          onClick={() => (step > 1 ? setStep(step - 1) : navigate(-1))}
+          onClick={() => {
+            if (onVerifyGate) { handleChangeEmail(); return; }
+            return step > 1 ? setStep(step - 1) : navigate(-1);
+          }}
           className="icon-btn"
+          aria-label={t.back}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -158,8 +258,44 @@ export default function Register() {
       </div>
 
       <div className="px-6 pt-3 pb-28 space-y-3">
-        {/* ── Step 1: Email & Password ── */}
-        {step === 1 && (
+        {/* ── Email-verification gate (between Step 1 form and Step 2) ── */}
+        {onVerifyGate && (
+          <div className="pt-3">
+            <div className="w-16 h-16 mx-auto rounded-full bg-brand-50 text-brand-500 flex items-center justify-center mb-4">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <path d="M4 7l8 6 8-6M4 7v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2"
+                  stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-center">{t.verifyEmailTitle}</h2>
+            <p className="text-[13px] text-ink-500 text-center mt-1">{t.verifyEmailBody}</p>
+            <p className="text-[14px] font-semibold text-center break-all mt-1">{form.email}</p>
+            <p className="text-[13px] text-ink-500 text-center mt-3 leading-snug">{t.verifyEmailHint}</p>
+
+            <div className="mt-6 space-y-2">
+              <button
+                onClick={handleResend}
+                disabled={resendBusy}
+                className="w-full py-2.5 rounded-2xl text-[13px] font-semibold text-brand-500 bg-brand-500/10 hover:bg-brand-500/15 transition disabled:opacity-60"
+              >
+                {resendBusy ? t.verificationSending : t.resendEmail}
+              </button>
+              {resendOk ? (
+                <p className="text-[12px] text-ok text-center">{t.resendSent}</p>
+              ) : null}
+              <button
+                onClick={handleChangeEmail}
+                disabled={verifyBusy}
+                className="w-full py-2.5 text-[13px] font-medium text-ink-500 disabled:opacity-60"
+              >
+                ← {t.changeEmail}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 1: Email & Password (hidden once the gate is showing) ── */}
+        {step === 1 && !onVerifyGate && (
           <>
             {/* Language picker — visible on the very first launch screen */}
             <div className="mb-2">
@@ -418,22 +554,34 @@ export default function Register() {
 
       {/* Fixed bottom button */}
       <div className="absolute bottom-4 left-0 right-0 px-6 space-y-2">
-        <button
-          onClick={next}
-          disabled={submitting || (step === 3 && !form.acceptedTerms)}
-          className="btn-primary disabled:opacity-60"
-        >
-          {submitting ? "..." : step === 3 ? t.signUp : t.next}
-        </button>
-
-        {step === 3 && !photoFile && (
+        {onVerifyGate ? (
           <button
-            onClick={submit}
-            disabled={submitting || !form.acceptedTerms}
-            className="w-full py-3 rounded-2xl text-[14px] font-semibold text-ink-500 bg-ink-100 active:scale-[0.99] transition disabled:opacity-60"
+            onClick={checkVerified}
+            disabled={verifyBusy}
+            className="btn-primary disabled:opacity-60"
           >
-            {submitting ? "..." : t.continueWithoutPhoto}
+            {verifyBusy ? "..." : t.iVerified}
           </button>
+        ) : (
+          <>
+            <button
+              onClick={next}
+              disabled={submitting || (step === 3 && !form.acceptedTerms)}
+              className="btn-primary disabled:opacity-60"
+            >
+              {submitting ? "..." : step === 3 ? t.signUp : t.next}
+            </button>
+
+            {step === 3 && !photoFile && (
+              <button
+                onClick={submit}
+                disabled={submitting || !form.acceptedTerms}
+                className="w-full py-3 rounded-2xl text-[14px] font-semibold text-ink-500 bg-ink-100 active:scale-[0.99] transition disabled:opacity-60"
+              >
+                {submitting ? "..." : t.continueWithoutPhoto}
+              </button>
+            )}
+          </>
         )}
       </div>
     </MobileShell>
