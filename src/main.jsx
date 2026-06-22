@@ -14,13 +14,17 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ErrorBoundary>
       <BrowserRouter>
-        <AuthProvider>
-          <NotificationProvider>
-            <CommunityProvider>
-              <App />
-            </CommunityProvider>
-          </NotificationProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <NotificationProvider>
+                <CommunityProvider>
+                  <App />
+                </CommunityProvider>
+              </NotificationProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </LanguageProvider>
       </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>

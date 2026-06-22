@@ -286,7 +286,7 @@ export default function BookDetail() {
   if (loading) {
     return (
       <MobileShell>
-        <p className="px-6 py-12 text-ink-500 text-center">Жүктелуде...</p>
+        <p className="px-6 py-12 text-ink-500 text-center">{t.loading}</p>
       </MobileShell>
     );
   }
@@ -295,12 +295,12 @@ export default function BookDetail() {
     return (
       <MobileShell>
         <div className="px-4 py-12 text-center">
-          <p className="text-ink-500 mb-4">{error || "Кітап табылмады"}</p>
+          <p className="text-ink-500 mb-4">{error || t.bookNotFound}</p>
           <button
             onClick={() => navigate(-1)}
             className="btn-primary"
           >
-            Артқа қайту
+            {t.goBack}
           </button>
         </div>
       </MobileShell>
@@ -321,7 +321,7 @@ export default function BookDetail() {
 
   return (
     <MobileShell>
-      <SearchBar value="" onChange={() => {}} onBack={() => navigate(-1)} placeholder="Search..." />
+      <SearchBar value="" onChange={() => {}} onBack={() => navigate(-1)} placeholder={t.searchPlaceholder} />
 
       <div className="px-4 pt-4 flex gap-3">
         <img
@@ -364,7 +364,7 @@ export default function BookDetail() {
         </p>
         {book.description && book.description.length > 100 ? (
           <button onClick={() => setExpand((x) => !x)} className="text-brand-500 text-[13px] mt-1">
-            {expand ? "Скрыть" : "Подробнее"}
+            {expand ? t.hide : t.showMore}
           </button>
         ) : null}
       </section>
@@ -380,10 +380,10 @@ export default function BookDetail() {
             </div>
             <div>
               <p className="font-semibold text-[15px]">
-                {daysLeft === 1 ? "1 күн қалды" : `${daysLeft} күн қалды`}
+                {daysLeft} {t.daysLeft}
               </p>
               <p className="text-[13px] text-ink-500">
-                {borrowingMaxDays ? `${borrowingMaxDays} күннен` : ""} — қайтару мерзімі
+                {borrowingMaxDays ? `${borrowingMaxDays} / ` : ""}{t.daysLeftSubtitle}
               </p>
             </div>
           </div>
@@ -399,14 +399,14 @@ export default function BookDetail() {
             </svg>
             <span className="font-semibold">{ratingAvg.toFixed(1)}</span>
           </div>
-          <p className="text-[12px] text-ink-500 mt-0.5">{ratingCount} бағалау</p>
+          <p className="text-[12px] text-ink-500 mt-0.5">{ratingCount} {t.ratingCount}</p>
         </div>
       </section>
 
       <section className="px-4 mt-5">
         <h3 className="section-title mb-2">{t.reviews}</h3>
         {reviews.length === 0 ? (
-          <p className="text-[13px] text-ink-500">Пока что нет отзывов.</p>
+          <p className="text-[13px] text-ink-500">{t.noReviews}</p>
         ) : (
           <ul className="space-y-2">
             {reviews.map((r) => (
@@ -422,13 +422,13 @@ export default function BookDetail() {
       {/* Owner — who added the book, never changes. Shown to all users. */}
       {owner && (
         <section className="px-4 mt-5">
-          <h3 className="section-title mb-2">Иесі</h3>
+          <h3 className="section-title mb-2">{t.ownerLabel}</h3>
           <Link to={`/users/${owner.id}`} className="card flex items-center gap-3 px-3 py-3">
             <Avatar src={owner.photoURL} name={`${owner.firstName} ${owner.lastName}`} />
             <div className="flex-1">
               <p className="font-medium">
                 {owner.firstName} {owner.lastName}
-                {owner.id === user?.id ? <span className="text-[12px] text-ink-500 ml-1">(сіз)</span> : null}
+                {owner.id === user?.id ? <span className="text-[12px] text-ink-500 ml-1">{t.youMark}</span> : null}
               </p>
               <p className="text-[13px] text-ink-500">@{owner.nickname}</p>
             </div>
@@ -447,13 +447,13 @@ export default function BookDetail() {
         if (!holder) return null;
         return (
           <section className="px-4 mt-5">
-            <h3 className="section-title mb-2">Ұстаушы</h3>
+            <h3 className="section-title mb-2">{t.holderLabel}</h3>
             <Link to={`/users/${holder.id}`} className="card flex items-center gap-3 px-3 py-3">
               <Avatar src={holder.photoURL} name={`${holder.firstName} ${holder.lastName}`} />
               <div className="flex-1">
                 <p className="font-medium">
                   {holder.firstName} {holder.lastName}
-                  {holder.id === user?.id ? <span className="text-[12px] text-ink-500 ml-1">(сіз)</span> : null}
+                  {holder.id === user?.id ? <span className="text-[12px] text-ink-500 ml-1">{t.youMark}</span> : null}
                 </p>
                 <p className="text-[13px] text-ink-500">@{holder.nickname}</p>
               </div>
@@ -468,9 +468,9 @@ export default function BookDetail() {
       {/* Return date — visible to all users when the book is borrowed */}
       {book.status === "unavailable" && activeBorrowing?.returnDate && (
         <section className="px-4 mt-5">
-          <h3 className="section-title mb-2">Қайтару күні</h3>
+          <h3 className="section-title mb-2">{t.returnDate}</h3>
           <div className="card px-4 py-3 flex items-center justify-between">
-            <span className="text-[14px] text-ink-700">Кітапты қайтару мерзімі</span>
+            <span className="text-[14px] text-ink-700">{t.returnDateNote}</span>
             <span className="font-semibold text-[14px]">
               {new Date(
                 typeof activeBorrowing.returnDate === "number"
@@ -485,7 +485,7 @@ export default function BookDetail() {
       <div className="px-4 mt-6 mb-2">
         {isAdminView ? (
           <p className="text-center text-[13px] text-ink-500 py-3 bg-ink-100 rounded-xl">
-            Администраторы не могут брать книги. Переключитесь в режим пользователя.
+            {t.adminCantBorrow}
           </p>
         ) : isCurrentHolder ? (
           /* Current borrower — can return, cannot get again */
@@ -495,15 +495,15 @@ export default function BookDetail() {
               disabled={returning}
               className="w-full py-3.5 rounded-2xl bg-ok text-white font-semibold text-[15px] active:scale-[0.99] transition disabled:opacity-60"
             >
-              {returning ? "…" : "Кітапты қайтару"}
+              {returning ? "…" : t.returnBook}
             </button>
             <p className="text-[12px] text-ink-500 text-center">
-              Бұл кітап қазір сізде. Оны қайтармайынша қайта ала алмайсыз.
+              {t.youHoldBook}
             </p>
           </div>
         ) : isOwner ? (
           <p className="text-center text-[13px] text-ink-500 py-3 bg-ink-100 rounded-xl">
-            Это ваша книга.
+            {t.yourBook}
           </p>
         ) : pickupRequest ? (
           /* Already requested — show a resume button, no new code is generated */
@@ -512,10 +512,10 @@ export default function BookDetail() {
               onClick={() => navigate(`/books/${id}/pickup`)}
               className="btn-primary"
             >
-              Продолжить получение книги →
+              {t.continueGetBook}
             </button>
             <p className="text-[12px] text-ink-500 text-center">
-              Код уже отправлен. Введите его на следующей странице.
+              {t.codeAlreadySent}
             </p>
           </div>
         ) : book.status === "unavailable" ? (
@@ -524,7 +524,7 @@ export default function BookDetail() {
             disabled={requesting}
             className="btn-primary"
           >
-            {requesting ? "…" : "Получить книгу"}
+            {requesting ? "…" : t.getBook}
           </button>
         ) : (
           <button
@@ -547,7 +547,7 @@ export default function BookDetail() {
           <div className="relative bg-surface rounded-t-3xl px-6 pt-5 pb-10 space-y-5">
             <div className="w-10 h-1 rounded-full bg-ink-200 mx-auto" />
             <div className="text-center">
-              <h2 className="text-[18px] font-bold">Кітапты бағалаңыз</h2>
+              <h2 className="text-[18px] font-bold">{t.rateBook}</h2>
               <p className="text-[13px] text-ink-500 mt-1">«{book.name}»</p>
             </div>
             <div className="flex justify-center gap-3">
@@ -576,7 +576,7 @@ export default function BookDetail() {
             <textarea
               value={returnReview}
               onChange={(e) => setReturnReview(e.target.value)}
-              placeholder="Пікіріңізді жазыңыз (міндетті емес)"
+              placeholder={t.ratingPlaceholder}
               rows={3}
               className="input resize-none text-[14px]"
             />
@@ -586,14 +586,14 @@ export default function BookDetail() {
                 disabled={returning}
                 className="btn-primary"
               >
-                {returning ? "…" : returnStars > 0 ? "Бағалап қайтару" : "Қайтару"}
+                {returning ? "…" : returnStars > 0 ? t.returnWithRating : t.returnBook}
               </button>
               <button
                 onClick={() => handleReturn(0, "")}
                 disabled={returning}
                 className="w-full py-3 text-[14px] text-ink-500 font-medium"
               >
-                Бағаламай қайтару
+                {t.returnWithoutRating}
               </button>
             </div>
           </div>

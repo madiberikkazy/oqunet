@@ -1,17 +1,34 @@
 // ─── Translation tables ───────────────────────────────────────────────────────
+// Three supported languages: Kazakh (kz, default), Russian (ru), English (en).
+// Every key MUST exist in all three dictionaries. Missing keys fall through
+// kz → en → the literal key name.
 
 const kz = {
   app: "OquNet",
+
+  // Common actions
   next: "Келесі",
   back: "Артқа",
   save: "Сақтау",
   cancel: "Болдырмау",
   submit: "Жіберу",
   delete: "Жою",
+  edit: "Өзгерту",
+  confirm: "Растау",
+  continue: "Жалғастыру",
+  close: "Жабу",
+  ok: "Жарайды",
+  yes: "Иә",
+  no: "Жоқ",
   search: "Іздеу",
   searchPlaceholder: "Іздеу...",
   noResults: "Ештеңе табылмады",
   loading: "Жүктелуде...",
+  required: "қажет",
+  error: "Қате",
+  or: "немесе",
+  optional: "Міндетті емес",
+  selectLanguage: "Тілді таңдаңыз",
 
   // Bottom nav
   navHome: "Басты",
@@ -19,18 +36,61 @@ const kz = {
   navNotification: "Хабарламалар",
   navProfile: "Профиль",
 
-  // Auth
+  // Auth — login
+  welcomeBack: "Қайта оралуыңызбен",
+  loginSubtitle: "OquNet аккаунтыңызға кіріңіз",
   signIn: "Кіру",
   signUp: "Тіркелу",
+  signInWithGoogle: "Google арқылы кіру",
+  signUpWithGoogle: "Google арқылы тіркелу",
+  noAccount: "Аккаунтыңыз жоқ па?",
+  haveAccount: "Аккаунтыңыз бар ма?",
+  loginErrorWrongPassword: "Қате құпия сөз",
+  loginErrorUserNotFound: "Пайдаланушы табылмады",
+  loginErrorTooMany: "Тым көп әрекет. Кейінірек қайталаңыз.",
+  loginErrorGeneric: "Кіру қатесі",
+  googleSignInError: "Google арқылы кіру қатесі",
+
+  // Auth — common fields
   email: "Email",
+  emailOrNickname: "email немесе nickname",
   identifier: "Email немесе никнейм",
   nickname: "Никнейм",
   firstName: "Аты",
   lastName: "Тегі",
   password: "Құпия сөз",
   confirmPassword: "Құпия сөзді растаңыз",
+  passwordMin: "Кемінде 6 таңба",
+  phone: "Телефон нөмірі",
   enableNotifications: "Хабарламаларды қосу",
   uploadPhoto: "Профиль суретін жүктеу",
+  uploadPhotoShort: "Сурет",
+
+  // Auth — register
+  registerEmailStepTitle: "Email & құпия сөз",
+  registerProfileStepTitle: "Профиль мәліметтері",
+  registerSkippable: "Бұл қадамды өткізіп жіберуге болады",
+  registerNicknameChecking: "Тексерілуде…",
+  registerNicknameAvailable: "бос",
+  registerNicknameTaken: "бос емес",
+  registerErrEmail: "Корректный email жазыңыз",
+  registerErrPasswordShort: "Құпия сөз кемінде 6 таңбадан тұруы тиіс",
+  registerErrPasswordMatch: "Құпия сөздер сәйкес келмейді",
+  registerErrNickname: "Никнейм жазыңыз",
+  registerErrCheckingNick: "Никнейм тексерілуде, күте тұрыңыз…",
+  registerAcceptTerms: "Мен Пайдалану шарттарымен таныстым және келісемін",
+  registerAcceptTermsLink: "Пайдалану шарттарымен",
+  registerMustAcceptTerms: "Тіркелу үшін Пайдалану шарттарын қабылдаңыз",
+  pickPhoto: "Сурет таңдау",
+  pickPhotoHint: "JPG, PNG, WEBP",
+  changePhoto: "Өзгерту",
+  removePhoto: "Жою",
+  continueWithoutPhoto: "Суретсіз жалғастыру",
+  emailAlreadyInUse: "Бұл email тіркелген",
+  emailInvalid: "Қате email",
+  passwordWeak: "Құпия сөз тым қарапайым (кемінде 6 таңба)",
+  emailPasswordDisabled: "Email/Password sign-in выключен в Firebase. Откройте Firebase Console → Authentication → Sign-in method и включите его.",
+  registerError: "Тіркелу қатесі",
 
   // Book status
   availableStatus: "қолжетімді",
@@ -41,14 +101,44 @@ const kz = {
   bookDescription: "Кітап сипаттамасы",
   rating: "Рейтинг",
   reviews: "Пікірлер",
+  noReviews: "Пока что нет отзывов.",
   saveBtn: "Сақтау",
   borrowBook: "Кітапты алу",
+  getBook: "Кітапты алу",
+  continueGetBook: "Кітапты алуды жалғастыру →",
+  codeAlreadySent: "Код жіберілді. Келесі бетте енгізіңіз.",
+  yourBook: "Бұл сіздің кітабыңыз.",
+  adminCantBorrow: "Администраторлар кітап ала алмайды. Пайдаланушы режиміне ауысыңыз.",
+  returnBook: "Кітапты қайтару",
+  youHoldBook: "Бұл кітап қазір сізде. Оны қайтармайынша қайта ала алмайсыз.",
+  rateBook: "Кітапты бағалаңыз",
+  ratingPlaceholder: "Пікіріңізді жазыңыз (міндетті емес)",
+  finishWithRating: "Бағалап аяқтау",
+  finish: "Аяқтау",
+  finishWithoutRating: "Бағаламай өту",
+  returnWithRating: "Бағалап қайтару",
+  returnWithoutRating: "Бағаламай қайтару",
+  ownerLabel: "Иесі",
+  holderLabel: "Ұстаушы",
+  youMark: "(сіз)",
+  returnDate: "Қайтару күні",
+  returnDateNote: "Кітапты қайтару мерзімі",
+  daysLeft: "күн қалды",
+  daysLeftSubtitle: "қайтару мерзімі",
+  bookNotFound: "Кітап табылмады",
+  goBack: "Артқа қайту",
+  showMore: "Толығырақ",
+  hide: "Жасыру",
+  ratingCount: "бағалау",
 
   // Profile
   ownedBooks: "Сізде қазір бар кітаптар",
   readingNow: "Қазір оқып жатқан кітап",
   completed: "Оқылған кітаптар",
   saved: "Сақталған кітаптар",
+  noReadingBook: "Оқып жатқан кітап жоқ",
+  openLibraryHint: "Кітапханаді ашып, бір кітап алыңыз.",
+  remainingDays: "Қалған күндер",
 
   // Settings — profile editing
   editProfile: "Профилді өзгерту",
@@ -58,7 +148,10 @@ const kz = {
   newPassword: "Жаңа құпия сөз",
   passwordChanged: "Құпия сөз өзгертілді!",
   wrongPassword: "Қате құпия сөз",
+  passwordsDoNotMatch: "Құпия сөздер сәйкес келмейді",
+  passwordMinError: "Кемінде 6 таңба",
   nicknameTaken: "Бұл никнейм бос емес",
+  fillAllFields: "Барлық өрістерді толтырыңыз",
   appearance: "Түр",
 
   // Settings
@@ -68,8 +161,20 @@ const kz = {
   themeDark: "Қараңғы",
   language: "Тіл",
   notifications: "Хабарламалар",
+  soundEffects: "Дыбыс эффектілері",
+  chooseSound: "Дыбыс түрін таңдаңыз",
+  browserNotifications: "Браузер құлақтандырулары",
+  permissionGranted: "Рұқсат берілген",
+  permissionDenied: "Рұқсат құлыптаулы",
+  permissionDefault: "Рұқсат сұралмаған",
+  requestPermission: "Рұқсат сұрау",
+  notificationsNotSupported: "Сіздің браузеріңіз хабарламаларды қолдамайды",
   role: "Рөл",
   account: "Аккаунт",
+  community: "Қоғамдастық",
+  leaveCommunity: "Қоғамдастықтан шығу",
+  leavePending: "Өтінішіңіз жіберілді. Администратор жауабын күтіңіз…",
+  appSection: "Қосымша",
   switchToAdmin: "Қауымдастық әкімшісі болу",
   switchToUser: "Пайдаланушы режиміне оралу",
   createCommunity: "Қауымдастық құру",
@@ -81,6 +186,9 @@ const kz = {
   // Notifications
   noNotifications: "Хабарламалар жоқ.",
   noNotificationsHint: "Кейін қараңыз — маңызды нәрсе пайда болған кезде хабарлаймыз!",
+  selectNotifications: "Таңдау",
+  selectedCount: "таңдалды",
+  markRead: "Оқылды деп белгілеу",
 
   // Filter
   filterTitle: "Сүзгі",
@@ -112,6 +220,12 @@ const kz = {
   bookPhoto: "Кітап суреті",
   addPhoto: "Сурет қосу",
   orPasteUrl: "Немесе сурет URL-ін енгізіңіз",
+  addBookErrName: "Атауы мен авторын жазыңыз",
+  addBookErrGenre: "Кемінде 1 жанр таңдаңыз",
+  addBookErrMaxDays: "Мерзім 3-тен 30 күнге дейін болуы тиіс",
+  addBookErrOwner: "Кітап иесін таңдаңыз",
+  addBookError: "Кітап құру қатесі",
+  newBookTitle: "Жаңа кітап қосылды",
 
   // Community
   communityNickname: "Қауымдастық никнеймі",
@@ -125,16 +239,30 @@ const kz = {
 
 const ru = {
   app: "OquNet",
+
+  // Common
   next: "Далее",
   back: "Назад",
   save: "Сохранить",
   cancel: "Отмена",
   submit: "Отправить",
   delete: "Удалить",
+  edit: "Изменить",
+  confirm: "Подтвердить",
+  continue: "Продолжить",
+  close: "Закрыть",
+  ok: "Хорошо",
+  yes: "Да",
+  no: "Нет",
   search: "Поиск",
   searchPlaceholder: "Поиск...",
   noResults: "Ничего не найдено",
   loading: "Загрузка...",
+  required: "обязательно",
+  error: "Ошибка",
+  or: "или",
+  optional: "Не обязательно",
+  selectLanguage: "Выберите язык",
 
   // Bottom nav
   navHome: "Главная",
@@ -142,18 +270,61 @@ const ru = {
   navNotification: "Уведомления",
   navProfile: "Профиль",
 
-  // Auth
+  // Auth — login
+  welcomeBack: "С возвращением",
+  loginSubtitle: "Войдите в свой аккаунт OquNet",
   signIn: "Войти",
   signUp: "Регистрация",
+  signInWithGoogle: "Войти через Google",
+  signUpWithGoogle: "Зарегистрироваться через Google",
+  noAccount: "Нет аккаунта?",
+  haveAccount: "Есть аккаунт?",
+  loginErrorWrongPassword: "Неверный пароль",
+  loginErrorUserNotFound: "Пользователь не найден",
+  loginErrorTooMany: "Слишком много попыток. Попробуйте позже.",
+  loginErrorGeneric: "Ошибка входа",
+  googleSignInError: "Ошибка входа через Google",
+
+  // Auth — common fields
   email: "Email",
+  emailOrNickname: "email или nickname",
   identifier: "Email или никнейм",
   nickname: "Никнейм",
   firstName: "Имя",
   lastName: "Фамилия",
   password: "Пароль",
   confirmPassword: "Подтвердите пароль",
+  passwordMin: "Минимум 6 символов",
+  phone: "Номер телефона",
   enableNotifications: "Включить уведомления",
   uploadPhoto: "Загрузить фото профиля",
+  uploadPhotoShort: "Фото",
+
+  // Auth — register
+  registerEmailStepTitle: "Email и пароль",
+  registerProfileStepTitle: "Данные профиля",
+  registerSkippable: "Этот шаг можно пропустить",
+  registerNicknameChecking: "Проверяем…",
+  registerNicknameAvailable: "свободен",
+  registerNicknameTaken: "уже занят",
+  registerErrEmail: "Введите корректный email",
+  registerErrPasswordShort: "Пароль должен быть не короче 6 символов",
+  registerErrPasswordMatch: "Пароли не совпадают",
+  registerErrNickname: "Введите никнейм",
+  registerErrCheckingNick: "Проверяем никнейм, подождите…",
+  registerAcceptTerms: "Я ознакомлен(а) с Условиями использования и согласен(на)",
+  registerAcceptTermsLink: "Условиями использования",
+  registerMustAcceptTerms: "Для регистрации примите Условия использования",
+  pickPhoto: "Выбрать фото",
+  pickPhotoHint: "JPG, PNG, WEBP",
+  changePhoto: "Изменить",
+  removePhoto: "Удалить",
+  continueWithoutPhoto: "Продолжить без фото",
+  emailAlreadyInUse: "Этот email уже зарегистрирован",
+  emailInvalid: "Неверный email",
+  passwordWeak: "Слишком слабый пароль (минимум 6 символов)",
+  emailPasswordDisabled: "Email/Password sign-in отключён в Firebase. Откройте Firebase Console → Authentication → Sign-in method и включите его.",
+  registerError: "Ошибка регистрации",
 
   // Book status
   availableStatus: "доступна",
@@ -164,14 +335,44 @@ const ru = {
   bookDescription: "Описание книги",
   rating: "Рейтинг",
   reviews: "Отзывы",
+  noReviews: "Пока что нет отзывов.",
   saveBtn: "Сохранить",
   borrowBook: "Взять книгу",
+  getBook: "Получить книгу",
+  continueGetBook: "Продолжить получение книги →",
+  codeAlreadySent: "Код уже отправлен. Введите его на следующей странице.",
+  yourBook: "Это ваша книга.",
+  adminCantBorrow: "Администраторы не могут брать книги. Переключитесь в режим пользователя.",
+  returnBook: "Вернуть книгу",
+  youHoldBook: "Эта книга сейчас у вас. Пока не вернёте — не сможете взять снова.",
+  rateBook: "Оцените книгу",
+  ratingPlaceholder: "Напишите отзыв (необязательно)",
+  finishWithRating: "Оценить и завершить",
+  finish: "Завершить",
+  finishWithoutRating: "Пропустить оценку",
+  returnWithRating: "Оценить и вернуть",
+  returnWithoutRating: "Вернуть без оценки",
+  ownerLabel: "Владелец",
+  holderLabel: "У кого книга",
+  youMark: "(вы)",
+  returnDate: "Дата возврата",
+  returnDateNote: "Срок возврата книги",
+  daysLeft: "дн. осталось",
+  daysLeftSubtitle: "срок возврата",
+  bookNotFound: "Книга не найдена",
+  goBack: "Назад",
+  showMore: "Подробнее",
+  hide: "Скрыть",
+  ratingCount: "оценок",
 
   // Profile
   ownedBooks: "Книги, которые у вас сейчас",
   readingNow: "Сейчас читаете",
   completed: "Прочитанные книги",
   saved: "Сохранённые книги",
+  noReadingBook: "Сейчас вы ничего не читаете",
+  openLibraryHint: "Откройте библиотеку и возьмите книгу.",
+  remainingDays: "Осталось дней",
 
   // Settings — profile editing
   editProfile: "Редактировать профиль",
@@ -181,7 +382,10 @@ const ru = {
   newPassword: "Новый пароль",
   passwordChanged: "Пароль изменён!",
   wrongPassword: "Неверный пароль",
+  passwordsDoNotMatch: "Пароли не совпадают",
+  passwordMinError: "Минимум 6 символов",
   nicknameTaken: "Этот никнейм уже занят",
+  fillAllFields: "Заполните все поля",
   appearance: "Оформление",
 
   // Settings
@@ -191,8 +395,20 @@ const ru = {
   themeDark: "Тёмная",
   language: "Язык",
   notifications: "Уведомления",
+  soundEffects: "Звуковые эффекты",
+  chooseSound: "Выберите звук",
+  browserNotifications: "Браузерные уведомления",
+  permissionGranted: "Разрешение выдано",
+  permissionDenied: "Разрешение заблокировано",
+  permissionDefault: "Разрешение не запрашивалось",
+  requestPermission: "Запросить разрешение",
+  notificationsNotSupported: "Ваш браузер не поддерживает уведомления",
   role: "Роль",
   account: "Аккаунт",
+  community: "Сообщество",
+  leaveCommunity: "Покинуть сообщество",
+  leavePending: "Запрос отправлен. Ждите ответа администратора…",
+  appSection: "Приложение",
   switchToAdmin: "Стать админом сообщества",
   switchToUser: "Вернуться в режим пользователя",
   createCommunity: "Создать сообщество",
@@ -204,6 +420,9 @@ const ru = {
   // Notifications
   noNotifications: "Пока что нет уведомлений.",
   noNotificationsHint: "Загляни позже — как только появится что-то важное, мы дадим знать!",
+  selectNotifications: "Выбрать",
+  selectedCount: "выбрано",
+  markRead: "Отметить прочитанным",
 
   // Filter
   filterTitle: "Фильтр",
@@ -235,6 +454,12 @@ const ru = {
   bookPhoto: "Фотография книги",
   addPhoto: "Добавить фото",
   orPasteUrl: "Или вставьте URL картинки",
+  addBookErrName: "Укажите название и автора",
+  addBookErrGenre: "Выберите минимум 1 жанр",
+  addBookErrMaxDays: "Срок должен быть от 3 до 30 дней",
+  addBookErrOwner: "Выберите владельца книги",
+  addBookError: "Ошибка создания книги",
+  newBookTitle: "Добавлена новая книга",
 
   // Community
   communityNickname: "Никнейм сообщества",
@@ -246,48 +471,304 @@ const ru = {
   contributedBook: "Какую книгу вы внесёте в сообщество?",
 };
 
-export const translations = { kz, ru };
+const en = {
+  app: "OquNet",
+
+  // Common
+  next: "Next",
+  back: "Back",
+  save: "Save",
+  cancel: "Cancel",
+  submit: "Submit",
+  delete: "Delete",
+  edit: "Edit",
+  confirm: "Confirm",
+  continue: "Continue",
+  close: "Close",
+  ok: "OK",
+  yes: "Yes",
+  no: "No",
+  search: "Search",
+  searchPlaceholder: "Search...",
+  noResults: "Nothing found",
+  loading: "Loading...",
+  required: "required",
+  error: "Error",
+  or: "or",
+  optional: "Optional",
+  selectLanguage: "Select language",
+
+  // Bottom nav
+  navHome: "Home",
+  navBooks: "Books",
+  navNotification: "Inbox",
+  navProfile: "Profile",
+
+  // Auth — login
+  welcomeBack: "Welcome back",
+  loginSubtitle: "Sign in to your OquNet account",
+  signIn: "Sign in",
+  signUp: "Sign up",
+  signInWithGoogle: "Sign in with Google",
+  signUpWithGoogle: "Sign up with Google",
+  noAccount: "No account?",
+  haveAccount: "Already have an account?",
+  loginErrorWrongPassword: "Wrong password",
+  loginErrorUserNotFound: "User not found",
+  loginErrorTooMany: "Too many attempts. Try again later.",
+  loginErrorGeneric: "Sign-in error",
+  googleSignInError: "Google sign-in failed",
+
+  // Auth — common fields
+  email: "Email",
+  emailOrNickname: "email or nickname",
+  identifier: "Email or nickname",
+  nickname: "Nickname",
+  firstName: "First name",
+  lastName: "Last name",
+  password: "Password",
+  confirmPassword: "Confirm password",
+  passwordMin: "At least 6 characters",
+  phone: "Phone number",
+  enableNotifications: "Enable notifications",
+  uploadPhoto: "Upload profile photo",
+  uploadPhotoShort: "Photo",
+
+  // Auth — register
+  registerEmailStepTitle: "Email & password",
+  registerProfileStepTitle: "Profile details",
+  registerSkippable: "You can skip this step",
+  registerNicknameChecking: "Checking…",
+  registerNicknameAvailable: "available",
+  registerNicknameTaken: "taken",
+  registerErrEmail: "Enter a valid email",
+  registerErrPasswordShort: "Password must be at least 6 characters",
+  registerErrPasswordMatch: "Passwords do not match",
+  registerErrNickname: "Enter a nickname",
+  registerErrCheckingNick: "Checking nickname, please wait…",
+  registerAcceptTerms: "I have read and accept the Terms of Use",
+  registerAcceptTermsLink: "Terms of Use",
+  registerMustAcceptTerms: "Accept the Terms of Use to register",
+  pickPhoto: "Pick a photo",
+  pickPhotoHint: "JPG, PNG, WEBP",
+  changePhoto: "Change",
+  removePhoto: "Remove",
+  continueWithoutPhoto: "Continue without photo",
+  emailAlreadyInUse: "This email is already registered",
+  emailInvalid: "Invalid email",
+  passwordWeak: "Password too weak (at least 6 characters)",
+  emailPasswordDisabled: "Email/Password sign-in is disabled in Firebase. Open Firebase Console → Authentication → Sign-in method and enable it.",
+  registerError: "Registration error",
+
+  // Book status
+  availableStatus: "available",
+  unavailableStatus: "borrowed",
+  soonStatus: "3 days left",
+
+  // Book detail
+  bookDescription: "Description",
+  rating: "Rating",
+  reviews: "Reviews",
+  noReviews: "No reviews yet.",
+  saveBtn: "Save",
+  borrowBook: "Borrow",
+  getBook: "Get book",
+  continueGetBook: "Continue pickup →",
+  codeAlreadySent: "Code already sent. Enter it on the next screen.",
+  yourBook: "This is your book.",
+  adminCantBorrow: "Admins cannot borrow books. Switch to user mode.",
+  returnBook: "Return book",
+  youHoldBook: "You currently hold this book. Return it before borrowing again.",
+  rateBook: "Rate the book",
+  ratingPlaceholder: "Write a review (optional)",
+  finishWithRating: "Rate & finish",
+  finish: "Finish",
+  finishWithoutRating: "Skip rating",
+  returnWithRating: "Rate & return",
+  returnWithoutRating: "Return without rating",
+  ownerLabel: "Owner",
+  holderLabel: "Holder",
+  youMark: "(you)",
+  returnDate: "Return date",
+  returnDateNote: "Return deadline",
+  daysLeft: "days left",
+  daysLeftSubtitle: "until return",
+  bookNotFound: "Book not found",
+  goBack: "Go back",
+  showMore: "Show more",
+  hide: "Hide",
+  ratingCount: "ratings",
+
+  // Profile
+  ownedBooks: "Books you own",
+  readingNow: "Currently reading",
+  completed: "Completed books",
+  saved: "Saved books",
+  noReadingBook: "Not reading anything right now",
+  openLibraryHint: "Open the library and borrow a book.",
+  remainingDays: "Days left",
+
+  // Settings — profile editing
+  editProfile: "Edit profile",
+  profileSaved: "Profile saved!",
+  changePassword: "Change password",
+  currentPassword: "Current password",
+  newPassword: "New password",
+  passwordChanged: "Password changed!",
+  wrongPassword: "Wrong password",
+  passwordsDoNotMatch: "Passwords do not match",
+  passwordMinError: "At least 6 characters",
+  nicknameTaken: "This nickname is taken",
+  fillAllFields: "Fill in all fields",
+  appearance: "Appearance",
+
+  // Settings
+  settings: "Settings",
+  theme: "Theme",
+  themeLight: "Light",
+  themeDark: "Dark",
+  language: "Language",
+  notifications: "Notifications",
+  soundEffects: "Sound effects",
+  chooseSound: "Choose a sound",
+  browserNotifications: "Browser notifications",
+  permissionGranted: "Permission granted",
+  permissionDenied: "Permission blocked",
+  permissionDefault: "Permission not requested",
+  requestPermission: "Request permission",
+  notificationsNotSupported: "Your browser does not support notifications",
+  role: "Role",
+  account: "Account",
+  community: "Community",
+  leaveCommunity: "Leave community",
+  leavePending: "Request sent. Waiting for admin response…",
+  appSection: "App",
+  switchToAdmin: "Become community admin",
+  switchToUser: "Back to user mode",
+  createCommunity: "Create community",
+  logOut: "Log out",
+  adminNote: "Switching mode does not delete your community.",
+  userNote: "To become an admin, you need to create a new community.",
+  returnBookFirst: "Return your borrowed book first.",
+
+  // Notifications
+  noNotifications: "No notifications yet.",
+  noNotificationsHint: "Check back later — we'll let you know when something happens!",
+  selectNotifications: "Select",
+  selectedCount: "selected",
+  markRead: "Mark as read",
+
+  // Filter
+  filterTitle: "Filter",
+  filterReset: "Reset",
+  filterApply: "Apply",
+  allBooks: "All books",
+  statusSoon: "Available soon",
+
+  // Add / edit book
+  genre: "Genre",
+  editBookTitle: "Edit book",
+  bookSaved: "Book saved!",
+  owner: "Owner",
+  status: "Status",
+  statusAvailable: "Available",
+  statusUnavailable: "Borrowed",
+  addBookTitle: "Add new book",
+  step: "Step",
+  ofStep: "/",
+  basicData: "Basic data",
+  name: "Title",
+  author: "Author",
+  year: "Year",
+  givenAt: "Given at",
+  maxDays: "Max loan (days)",
+  description: "Description",
+  descriptionPlaceholder: "Anything important the reader should know",
+  whoHasIt: "Who has this book right now?",
+  bookPhoto: "Book cover",
+  addPhoto: "Add photo",
+  orPasteUrl: "Or paste an image URL",
+  addBookErrName: "Enter the title and author",
+  addBookErrGenre: "Pick at least 1 genre",
+  addBookErrMaxDays: "Loan must be between 3 and 30 days",
+  addBookErrOwner: "Pick the book owner",
+  addBookError: "Failed to create book",
+  newBookTitle: "New book added",
+
+  // Community
+  communityNickname: "Community nickname",
+  communityName: "Community name",
+  communityPhoto: "Community photo",
+  members: "Members",
+  invite: "Invite",
+  joinCommunity: "Request to join",
+  contributedBook: "Which book will you bring to the community?",
+};
+
+export const translations = { kz, ru, en };
+
+export const SUPPORTED_LANGS = [
+  { code: "kz", label: "Қазақша", short: "KZ" },
+  { code: "ru", label: "Русский", short: "RU" },
+  { code: "en", label: "English", short: "EN" },
+];
+
+export const DEFAULT_LANG = "kz";
+
+export function isSupportedLang(code) {
+  return SUPPORTED_LANGS.some((l) => l.code === code);
+}
+
+/** Resolve the current language: localStorage first, then default. */
+export function getCurrentLang() {
+  if (typeof window === "undefined") return DEFAULT_LANG;
+  const stored = localStorage.getItem("lang");
+  return isSupportedLang(stored) ? stored : DEFAULT_LANG;
+}
 
 // ─── Genre list — stable `value` stored in DB, localised labels ───────────────
 export const GENRES = [
-  { value: "fiction",     kz: "Көркем",           ru: "Художественная" },
-  { value: "nonfiction",  kz: "Деректі",          ru: "Нон-фикшн" },
-  { value: "fantasy",     kz: "Фэнтези",          ru: "Фэнтези" },
-  { value: "scifi",       kz: "Ғыл. фантастика",  ru: "Науч. фантастика" },
-  { value: "thriller",    kz: "Триллер",          ru: "Триллер" },
-  { value: "mystery",     kz: "Детектив",         ru: "Детектив" },
-  { value: "romance",     kz: "Романтика",        ru: "Романтика" },
-  { value: "adventure",   kz: "Приключение",      ru: "Приключения" },
-  { value: "history",     kz: "Тарих",            ru: "История" },
-  { value: "biography",   kz: "Өмірбаян",         ru: "Биография" },
-  { value: "science",     kz: "Ғылым",            ru: "Наука" },
-  { value: "selfhelp",    kz: "Өзін-өзі дамыту",  ru: "Саморазвитие" },
-  { value: "business",    kz: "Бизнес",           ru: "Бизнес" },
-  { value: "psychology",  kz: "Психология",       ru: "Психология" },
-  { value: "philosophy",  kz: "Философия",        ru: "Философия" },
-  { value: "children",    kz: "Балалар",          ru: "Детская" },
-  { value: "classic",     kz: "Классика",         ru: "Классика" },
-  { value: "poetry",      kz: "Поэзия",           ru: "Поэзия" },
-  { value: "horror",      kz: "Қорқынышты",       ru: "Ужасы" },
-  { value: "other",       kz: "Басқа",            ru: "Другое" },
+  { value: "fiction",     kz: "Көркем",           ru: "Художественная",  en: "Fiction" },
+  { value: "nonfiction",  kz: "Деректі",          ru: "Нон-фикшн",       en: "Non-fiction" },
+  { value: "fantasy",     kz: "Фэнтези",          ru: "Фэнтези",         en: "Fantasy" },
+  { value: "scifi",       kz: "Ғыл. фантастика",  ru: "Науч. фантастика", en: "Sci-fi" },
+  { value: "thriller",    kz: "Триллер",          ru: "Триллер",         en: "Thriller" },
+  { value: "mystery",     kz: "Детектив",         ru: "Детектив",        en: "Mystery" },
+  { value: "romance",     kz: "Романтика",        ru: "Романтика",       en: "Romance" },
+  { value: "adventure",   kz: "Приключение",      ru: "Приключения",     en: "Adventure" },
+  { value: "history",     kz: "Тарих",            ru: "История",         en: "History" },
+  { value: "biography",   kz: "Өмірбаян",         ru: "Биография",       en: "Biography" },
+  { value: "science",     kz: "Ғылым",            ru: "Наука",           en: "Science" },
+  { value: "selfhelp",    kz: "Өзін-өзі дамыту",  ru: "Саморазвитие",    en: "Self-help" },
+  { value: "business",    kz: "Бизнес",           ru: "Бизнес",          en: "Business" },
+  { value: "psychology",  kz: "Психология",       ru: "Психология",      en: "Psychology" },
+  { value: "philosophy",  kz: "Философия",        ru: "Философия",       en: "Philosophy" },
+  { value: "children",    kz: "Балалар",          ru: "Детская",         en: "Children" },
+  { value: "classic",     kz: "Классика",         ru: "Классика",        en: "Classic" },
+  { value: "poetry",      kz: "Поэзия",           ru: "Поэзия",          en: "Poetry" },
+  { value: "horror",      kz: "Қорқынышты",       ru: "Ужасы",           en: "Horror" },
+  { value: "other",       kz: "Басқа",            ru: "Другое",          en: "Other" },
 ];
 
 /** Return the localised label for a genre value, or the value itself as fallback. */
 export function genreLabel(value) {
-  const lang = typeof window !== "undefined" ? localStorage.getItem("lang") || "kz" : "kz";
+  const lang = getCurrentLang();
   const found = GENRES.find((g) => g.value === value);
   return found ? found[lang] ?? found.kz : value;
 }
 
 // ─── Proxy-based `t` — reads the current language on every access ─────────────
 // Components just import `t` once; switching language re-renders them naturally
-// because useLang() triggers a re-render, making every `t.key` re-evaluate.
+// because the top-level <App> subscribes to LanguageContext.
+// Fallback order: current → en → kz → key name (so a missing key never crashes).
 export const t = new Proxy({}, {
   get(_, key) {
-    const lang =
-      typeof window !== "undefined"
-        ? localStorage.getItem("lang") || "kz"
-        : "kz";
-    return translations[lang]?.[key] ?? translations.kz[key] ?? key;
+    const lang = getCurrentLang();
+    return (
+      translations[lang]?.[key] ??
+      translations.en?.[key] ??
+      translations.kz[key] ??
+      key
+    );
   },
 });

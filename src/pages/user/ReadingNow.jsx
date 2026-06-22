@@ -107,7 +107,7 @@ export default function ReadingNow() {
       {loading ? (
         <p className="text-center text-ink-400 text-[14px] mt-10">{t.loading}</p>
       ) : !borrowing ? (
-        <EmptyState title="Оқып жатқан кітап жоқ" subtitle="Кітапхананы ашып, бір кітап алыңыз." />
+        <EmptyState title={t.noReadingBook} subtitle={t.openLibraryHint} />
       ) : (
         <div className="px-4 space-y-4">
           {/* Book card */}
@@ -139,7 +139,7 @@ export default function ReadingNow() {
           {/* Progress widget */}
           <div className="card px-4 py-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-[14px] text-ink-600 font-medium">Қалған күндер</p>
+              <p className="text-[14px] text-ink-600 font-medium">{t.remainingDays}</p>
               <span className="text-[32px] font-bold text-brand-500 leading-none">{daysLeft}</span>
             </div>
 
@@ -170,7 +170,7 @@ export default function ReadingNow() {
             disabled={finishing}
             className="w-full py-3.5 rounded-2xl bg-ok text-white font-semibold text-[15px] active:scale-[0.99] transition disabled:opacity-60"
           >
-            {finishing ? "…" : "Аяқтау"}
+            {finishing ? "…" : t.finish}
           </button>
         </div>
       )}
@@ -188,7 +188,7 @@ export default function ReadingNow() {
             <div className="w-10 h-1 rounded-full bg-ink-200 mx-auto" />
 
             <div className="text-center">
-              <h2 className="text-[18px] font-bold">Кітапты бағалаңыз</h2>
+              <h2 className="text-[18px] font-bold">{t.rateBook}</h2>
               <p className="text-[13px] text-ink-500 mt-1">«{borrowing?.bookName}»</p>
             </div>
 
@@ -221,7 +221,7 @@ export default function ReadingNow() {
             <textarea
               value={review}
               onChange={(e) => setReview(e.target.value)}
-              placeholder="Пікіріңізді жазыңыз (міндетті емес)"
+              placeholder={t.ratingPlaceholder}
               rows={3}
               className="input resize-none text-[14px]"
             />
@@ -233,14 +233,14 @@ export default function ReadingNow() {
                 disabled={finishing}
                 className="btn-primary"
               >
-                {finishing ? "…" : stars > 0 ? "Бағалап аяқтау" : "Аяқтау"}
+                {finishing ? "…" : stars > 0 ? t.finishWithRating : t.finish}
               </button>
               <button
                 onClick={() => finishBorrowing(0, "")}
                 disabled={finishing}
                 className="w-full py-3 text-[14px] text-ink-500 font-medium"
               >
-                Бағаламай өту
+                {t.finishWithoutRating}
               </button>
             </div>
           </div>

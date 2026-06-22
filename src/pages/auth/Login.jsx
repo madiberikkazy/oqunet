@@ -21,7 +21,7 @@ export default function Login() {
       setUser(profile);
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err?.message || "Google кіру қатесі");
+      setError(err?.message || t.googleSignInError);
     } finally {
       setGoogleBusy(false);
     }
@@ -50,8 +50,8 @@ export default function Login() {
             <path d="M4 6.5C4 5.67 4.67 5 5.5 5h13c.83 0 1.5.67 1.5 1.5v.5H4v-.5Zm0 3.5h16v1H4v-1Zm0 3h16V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18v-5Z" stroke="currentColor" strokeWidth="1.6" />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold">С возвращением</h1>
-        <p className="text-[13px] text-ink-500">Войдите в свой аккаунт OquNet</p>
+        <h1 className="text-2xl font-bold">{t.welcomeBack}</h1>
+        <p className="text-[13px] text-ink-500">{t.loginSubtitle}</p>
       </div>
 
       <form onSubmit={onSubmit} className="px-6 pt-6 space-y-3">
@@ -60,7 +60,7 @@ export default function Login() {
           <input
             value={form.identifier}
             onChange={(e) => setForm((f) => ({ ...f, identifier: e.target.value.trim() }))}
-            placeholder="email или nickname"
+            placeholder={t.emailOrNickname}
             autoComplete="username"
             className="input"
           />
@@ -86,7 +86,7 @@ export default function Login() {
         {/* Divider */}
         <div className="flex items-center gap-3 py-1">
           <div className="flex-1 h-px bg-ink-200" />
-          <span className="text-[12px] text-ink-400">немесе</span>
+          <span className="text-[12px] text-ink-400">{t.or}</span>
           <div className="flex-1 h-px bg-ink-200" />
         </div>
 
@@ -98,11 +98,11 @@ export default function Login() {
           className="w-full flex items-center justify-center gap-3 py-3 rounded-2xl border border-ink-200 bg-surface text-ink-700 font-medium text-[14px] active:scale-[0.98] transition disabled:opacity-60"
         >
           <GoogleIcon />
-          {googleBusy ? "..." : "Google арқылы кіру"}
+          {googleBusy ? "..." : t.signInWithGoogle}
         </button>
 
         <p className="text-center text-[14px] text-ink-500 pt-2">
-          Нет аккаунта?{" "}
+          {t.noAccount}{" "}
           <Link to="/auth/register" className="text-brand-500 font-medium">{t.signUp}</Link>
         </p>
       </form>
@@ -123,10 +123,9 @@ function GoogleIcon() {
 
 function prettyError(err) {
   const code = err?.code || "";
-  if (code === "auth/wrong-password" || code === "auth/invalid-credential") return "Неверный пароль";
-  if (code === "auth/user-not-found") return "Пользователь не найден";
-  if (code === "auth/too-many-requests") return "Слишком много попыток. Попробуйте позже.";
-  if (code === "auth/operation-not-allowed")
-    return "Email/Password sign-in выключен в Firebase. Откройте Firebase Console → Authentication → Sign-in method и включите его.";
-  return err?.message || "Ошибка входа";
+  if (code === "auth/wrong-password" || code === "auth/invalid-credential") return t.loginErrorWrongPassword;
+  if (code === "auth/user-not-found") return t.loginErrorUserNotFound;
+  if (code === "auth/too-many-requests") return t.loginErrorTooMany;
+  if (code === "auth/operation-not-allowed") return t.emailPasswordDisabled;
+  return err?.message || t.loginErrorGeneric;
 }
