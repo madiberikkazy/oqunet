@@ -1,15 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import Avatar from "../../components/Avatar.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import PostCard from "../../components/PostCard.jsx";
+import { useQueryClient } from "@tanstack/react-query";
+import { qk } from "../../lib/queryKeys.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import {
   createComment, deleteComment, getCommunity, getPost, togglePostLike, watchComments,
 } from "../../firebase/firestore.js";
 import { logger } from "../../utils/logger.js";
+import { attempt, release, retryAfterSeconds } from "../../utils/rateLimit.js";
+import { track } from "../../utils/analytics.js";
 import { writeError } from "../../utils/writeError.js";
 import { formatPostStamp } from "../../utils/time.js";
 import { t } from "../../utils/i18n.js";
@@ -30,8 +34,9 @@ import { t } from "../../utils/i18n.js";
 export default function PostDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, refresh } = useAuth();
+  const { user, setUser } = useAuth();
   const { community: myCommunity } = useCommunity();
+  const queryClient = useQueryClient();
 
   const [post, setPost] = useState(null);
   const [community, setCommunity] = useState(null);
@@ -42,14 +47,31 @@ export default function PostDetail() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
+  // Drawn from the profile document, which is also what the write compares
+  // against — see the note on Home's onLike for what happens when a screen
+  // keeps its own answer to this instead.
   const [liked, setLiked] = useState(false);
   useEffect(() => { setLiked((user?.likedPostIds || []).includes(id)); }, [user?.likedPostIds, id]);
+  const writing = useRef(false);
 
   useEffect(() => {
     if (!id) return undefined;
     let cancelled = false;
     setLoading(true);
-    getPost(id)
+    // Through the query cache rather than straight at Firestore, so that the
+    // read a feed row already started on touchstart is the read this screen
+    // gets. `fetchQuery` returns the cached document when it is still fresh
+    // and performs the request otherwise, which is the same behaviour this
+    // effect had before — minus the round trip when a prefetch beat it here.
+    //
+    // The post stays in local state below: it is edited optimistically on
+    // every like and every reply, and that is a different job from caching.
+    queryClient
+      .fetchQuery({
+        queryKey: qk.posts.detail(id),
+        queryFn: () => getPost(id),
+        staleTime: 60_000,
+      })
       .then(async (p) => {
         if (cancelled) return;
         setPost(p);
@@ -64,7 +86,7 @@ export default function PostDetail() {
       .catch((err) => logger.error("postDetail.load", err?.message, { postId: id, code: err?.code }))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, queryClient]);
 
   // The audience the query has to name — the caller's own community, or the
   // public flag. A post from somebody else's public community is read through
@@ -85,6 +107,13 @@ export default function PostDetail() {
   async function send(e) {
     e.preventDefault();
     if (sending || !body.trim() || !post?.id || !user?.id) return;
+
+    const gate = attempt("comment.create");
+    if (!gate.allowed) {
+      setError(t.rateLimited(retryAfterSeconds(gate.retryAfterMs)));
+      return;
+    }
+
     setSending(true);
     setError("");
     try {
@@ -103,8 +132,10 @@ export default function PostDetail() {
       // The subscription brings the reply back; only the counter on the card
       // above is this screen's own copy to move.
       setPost((prev) => (prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : prev));
+      track("comment.create", { length: body.trim().length });
     } catch (err) {
       logger.error("postDetail.send", err?.message, { code: err?.code });
+      release("comment.create");
       setError(writeError(err));
     } finally {
       setSending(false);
@@ -122,23 +153,29 @@ export default function PostDetail() {
   }
 
   async function onLike() {
-    if (!user?.id || !post?.id) return;
-    const wasLiked = liked;
+    if (!user?.id || !post?.id || writing.current) return;
+
+    const current = user.likedPostIds || [];
+    const wasLiked = current.includes(post.id);
+
+    writing.current = true;
     setLiked(!wasLiked);
     setPost((prev) => (prev
       ? { ...prev, likeCount: Math.max(0, (prev.likeCount || 0) + (wasLiked ? -1 : 1)) }
       : prev));
     try {
-      await togglePostLike({
-        postId: post.id, userId: user.id, likedPostIds: user.likedPostIds || [], liked: !wasLiked,
+      const { likedPostIds } = await togglePostLike({
+        postId: post.id, userId: user.id, likedPostIds: current, liked: !wasLiked,
       });
-      refresh();
+      setUser((prev) => (prev && prev.id === user.id ? { ...prev, likedPostIds } : prev));
     } catch (err) {
       logger.error("postDetail.like", err?.message, { postId: post.id });
       setLiked(wasLiked);
       setPost((prev) => (prev
         ? { ...prev, likeCount: Math.max(0, (prev.likeCount || 0) + (wasLiked ? 1 : -1)) }
         : prev));
+    } finally {
+      writing.current = false;
     }
   }
 
