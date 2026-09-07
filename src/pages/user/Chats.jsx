@@ -9,6 +9,7 @@ import EmptyState from "../../components/EmptyState.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useChats } from "../../contexts/ChatContext.jsx";
 import { getUserById, otherMemberId, unreadFor } from "../../firebase/firestore.js";
+import { useBlocked } from "../../utils/useBlocked.js";
 import { qk } from "../../lib/queryKeys.js";
 import { formatChatStamp } from "../../utils/time.js";
 import { peerName } from "../../utils/chatPeer.js";
@@ -31,12 +32,20 @@ export default function Chats() {
   // Rows whose other member cannot be identified are dropped rather than drawn:
   // a chat the reader is somehow not in has no peer to name, and there is
   // nothing useful to put in the row.
+  const { isBlocked } = useBlocked();
+
+  // A blocked person's conversation leaves the list too. The rules already
+  // stop them sending anything new, but the thread they left behind is still
+  // their words on the reader's screen — and a reader who blocked somebody and
+  // then found the conversation still sitting in their inbox would reasonably
+  // conclude the block had not worked. Nothing is deleted: unblocking brings
+  // the thread back exactly as it was.
   const rows = useMemo(
     () =>
       chats
         .map((chat) => ({ chat, peerId: otherMemberId(chat, user?.id) }))
-        .filter((row) => !!row.peerId),
-    [chats, user?.id]
+        .filter((row) => !!row.peerId && !isBlocked(row.peerId)),
+    [chats, user?.id, isBlocked]
   );
 
   const peerIds = useMemo(

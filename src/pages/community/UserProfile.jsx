@@ -7,7 +7,7 @@ import FollowButton from "../../components/FollowButton.jsx";
 import MessageButton from "../../components/MessageButton.jsx";
 import PostCard from "../../components/PostCard.jsx";
 import ProfileHeader from "../../components/ProfileHeader.jsx";
-import KebabMenu from "../../components/KebabMenu.jsx";
+import ModerationMenu from "../../components/ModerationMenu.jsx";
 import ProfileStatsRow, { MEMBER_STATS } from "../../components/ProfileStatsRow.jsx";
 import ReadingProgressCard from "../../components/ReadingProgressCard.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -15,6 +15,7 @@ import { getBook, getCommunityReadingRank } from "../../firebase/firestore.js";
 import { qk } from "../../lib/queryKeys.js";
 import { useMemberProfile, EMPTY_LISTS } from "../../utils/useMemberProfile.js";
 import { useProfileShare } from "../../utils/useProfileShare.js";
+import { useBlocked } from "../../utils/useBlocked.js";
 import { t } from "../../utils/i18n.js";
 import Loading from "../../components/Loading.jsx";
 
@@ -39,6 +40,7 @@ import Loading from "../../components/Loading.jsx";
  *     is theirs to say rather than counted about them.
  */
 export default function UserProfile() {
+  const { isBlocked } = useBlocked();
   const { id } = useParams();
   const navigate = useNavigate();
   const { user: viewer } = useAuth();
@@ -106,6 +108,8 @@ export default function UserProfile() {
     );
   }
 
+  const blocked = isBlocked(member.id);
+
   const stats = {
     held: lists.held.length,
     completed: lists.completed.length,
@@ -130,7 +134,16 @@ export default function UserProfile() {
         // won often enough to be a nuisance. Neither is a *primary* action on
         // somebody else's profile, and this is where the secondary ones live.
         menu={
-          <KebabMenu
+          // The same corner, now also carrying report and block. They are
+          // appended by ModerationMenu rather than listed here, so every
+          // surface that shows somebody else's content offers exactly the same
+          // two actions with the same wording.
+          <ModerationMenu
+            targetType="user"
+            targetId={member.id}
+            authorId={member.id}
+            authorName={`${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
+              || `@${member.nickname ?? ""}`}
             triggerClassName="w-10 h-10 rounded-xl bg-white/15 text-white"
             items={[
               ...(community ? [{
@@ -152,14 +165,24 @@ export default function UserProfile() {
         // brand colour and the left, reading position; the message button is
         // grey beside it rather than a second thing shouting the same volume.
         action={
-          <div className="flex items-stretch gap-2">
-            <FollowButton
-              userId={member.id}
-              className="flex-1"
-              onChange={({ delta }) => bumpFollowers(delta)}
-            />
-            <MessageButton userId={member.id} className="flex-1" />
-          </div>
+          // Somebody the reader has blocked keeps a profile — blocking is not
+          // erasure, and undoing it has to be possible from here — but the two
+          // actions that would reach them are gone, replaced by the reason
+          // they are gone. Writing to a person you blocked is not a thing
+          // anybody means to do, and a live message button beside a block you
+          // set yourself reads as the block having failed.
+          blocked ? (
+            <p className="text-[13px] text-white/80 text-center py-2">{t.blockedNotice}</p>
+          ) : (
+            <div className="flex items-stretch gap-2">
+              <FollowButton
+                userId={member.id}
+                className="flex-1"
+                onChange={({ delta }) => bumpFollowers(delta)}
+              />
+              <MessageButton userId={member.id} className="flex-1" />
+            </div>
+          )
         }
       />
 

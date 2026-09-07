@@ -208,7 +208,7 @@ export async function sendPasswordReset(email) {
  */
 export async function finalizeRegistration({
   uid, email, password, nickname, firstName, lastName, address,
-  notificationsEnabled, photoURL,
+  notificationsEnabled, photoURL, acceptedTerms,
 }) {
   const cleanEmail = normalizeEmail(email);
   const cleanNick = normalizeNickname(nickname);
@@ -249,8 +249,18 @@ export async function finalizeRegistration({
     photoURL: photoURL || "",
     role: "user",
     communityId: null,
+    // Whether the terms were accepted — the *fact*, not the record of it. The
+    // moment and the version are derived in schema.js, so a caller cannot name
+    // a time it did not happen or a wording that never existed.
+    acceptedTerms: Boolean(acceptedTerms),
     // No `createdAt`: createUserDoc stamps it server-side.
   };
+
+  // Registration cannot complete without it. The form already refuses to
+  // submit, but the form is a screen and this is the boundary: an account in
+  // the database with no record of having accepted the terms is exactly what
+  // App Store guideline 1.2 asks us not to have.
+  if (!profile.acceptedTerms) throw new Error(t.termsRequired);
   if (!isFirebaseConfigured) {
     // Mock-only: keep the password for nickname-login support.
     profile.password = password;

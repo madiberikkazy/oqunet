@@ -78,9 +78,11 @@ app.get("/health", (_req, res) => {
 export const api = onRequest(
   {
     region: REGION,
-    // The endpoints are called before anything else can happen on a fresh
-    // install, and a cold start there is the reader waiting on a settings
-    // toggle. One warm instance is pennies and removes that wait.
+    // No warm instance. A cold start costs the reader a second or two on the
+    // settings toggle, once; a warm one costs money every hour of every day
+    // whether anybody touches it or not, and idle instances are the only way
+    // this project can run up a bill at its current size. Worth revisiting if
+    // registration ever becomes something people wait on.
     minInstances: 0,
     maxInstances: 10,
     // Auth is the ID token in the header, checked per route. The function

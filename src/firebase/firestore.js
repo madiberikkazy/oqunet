@@ -17,6 +17,7 @@ import {
   chatIdFor, chatMemberIds, chatPreviewOf, chatWatermark,
   normalizeNewBook, normalizeBookPatch, normalizeBookOwner, normalizeNewBorrowing,
   normalizeNewChat, normalizeNewMessage, normalizeNewFollow, followIdFor,
+  normalizeNewReport, normalizeNewBlock, blockIdFor,
   normalizeCommunityInvite,
   normalizeNewCommunity, normalizeCommunityPatch, normalizeNewPost, normalizePostPatch,
   normalizeNewComment,
@@ -39,7 +40,8 @@ export { SchemaError } from "./schema.js";
 export { chatIdFor, otherMemberId } from "./schema.js";
 // A follow's id is likewise a pure function of the two people in it, so a
 // screen asking "am I following them?" reads one known path — see Follows.
-export { followIdFor } from "./schema.js";
+export { followIdFor, blockIdFor } from "./schema.js";
+export { REPORT_REASONS, REPORT_TARGETS, REPORT_NOTE_MAX } from "./schema.js";
 // The tick beside a message is a pure function of the message and the two
 // watermarks on its chat — see the receipts note in schema.js.
 export { messageStatus, MESSAGE_STATUS, chatWatermark } from "./schema.js";
@@ -3067,3 +3069,75 @@ export async function getCommunityReadingRank({ communityId, userId } = {}) {
 // Reviews are not a separate collection: a review is the optional text a
 // reader attaches to their rating, so it lives on the rating document and is
 // derived from listRatingsForBook via reviewsFromRatings (utils/rating.js).
+// ── Reports and blocks ──────────────────────────────────────────────────────
+//
+// The two things a reader can do about somebody else's behaviour. They are
+// deliberately different in kind, and the difference is the point:
+//
+//   report  tells us. Nothing on the reporter's screen changes, and they are
+//           told so — a report that silently did nothing visible would teach
+//           people that reporting is pointless.
+//   block   changes the reader's own experience, immediately and without
+//           asking anybody. It needs no moderator and no delay.
+//
+// Somebody dealing with harassment should not have to wait on us to make it
+// stop, which is why blocking is instant and local. Reporting is how it
+// reaches a human.
+
+/**
+ * File a report.
+ *
+ * Write-only from the client's side: the reporter cannot read the queue back,
+ * cannot see anybody else's reports, and cannot change one after filing. See
+ * the `reports` rules — the closure is deliberate, because a readable queue
+ * would tell a reporter's target that they had been reported.
+ *
+ * Deliberately not deduplicated. Two people reporting the same post is the
+ * single most useful signal a moderation queue has, and collapsing them would
+ * throw it away; one person reporting twice is cheap noise by comparison.
+ */
+export async function createReport({ reporterId, targetType, targetId, targetAuthorId, reason, note } = {}) {
+  return createOne("reports", normalizeNewReport({
+    reporterId, targetType, targetId, targetAuthorId, reason, note,
+  }));
+}
+
+/**
+ * Block somebody.
+ *
+ * Idempotent: blocking a person already blocked overwrites the same row, so a
+ * double tap cannot produce two edges to unpick. Returns nothing worth
+ * branching on for that reason.
+ */
+export async function blockUser({ blockerId, blockedId } = {}) {
+  const document = normalizeNewBlock({ blockerId, blockedId });
+  await createOne("blocks", document);
+  return { blocked: true, id: document.id };
+}
+
+export async function unblockUser({ blockerId, blockedId } = {}) {
+  await deleteOne("blocks", blockIdFor(blockerId, blockedId));
+  return { blocked: false };
+}
+
+/**
+ * Everyone this reader has blocked.
+ *
+ * One query per session, cached by TanStack Query and consulted by every
+ * screen that renders somebody else's words. Returns ids rather than
+ * documents: every caller wants membership, and a Set of ids is what a filter
+ * over a page of posts actually needs.
+ */
+export async function listBlockedIds(blockerId) {
+  if (!blockerId) return [];
+  const rows = await getCollection("blocks", {
+    where: [["blockerId", "==", blockerId]],
+  });
+  return rows.map((row) => row.blockedId).filter(Boolean);
+}
+
+/** Has `blockerId` blocked `blockedId`? A point read on a known path. */
+export async function isUserBlocked({ blockerId, blockedId } = {}) {
+  if (!blockerId || !blockedId || blockerId === blockedId) return false;
+  return Boolean(await getOne("blocks", blockIdFor(blockerId, blockedId)));
+}

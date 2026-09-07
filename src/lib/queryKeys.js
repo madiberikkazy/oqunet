@@ -38,6 +38,15 @@ export const qk = {
   users: {
     byId: (id) => ["users", id],
   },
+  // Everyone this reader has blocked. One entry per session: it is consulted
+  // by every screen that renders somebody else's words, so it must not be a
+  // fetch per screen. Invalidated by blocking and unblocking, and by nothing
+  // else — a block is only ever changed by the person who made it.
+  blocked: {
+    all: ["blocked"],
+    ids: (userId) => ["blocked", "ids", userId],
+    people: (userId) => ["blocked", "people", userId],
+  },
   posts: {
     // One thread's post document. The screen still holds the post in local
     // state — it edits it optimistically on every like and reply — but it

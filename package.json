@@ -6,7 +6,8 @@
   "description": "OquNet \u2014 Book sharing community (MVP)",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run legal && vite build",
+    "legal": "node scripts/build-legal.mjs",
     "preview": "vite preview",
     "seed": "node scripts/seed.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-oqunet-rules 'node --test tests/firestore.rules.test.js'",

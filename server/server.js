@@ -44,9 +44,6 @@
 
 import express from "express";
 import admin from "firebase-admin";
-import { mountPushRoutes, pushReady } from "./push.js";
-import { mountFcmRoutes, fcmReady } from "./fcm.js";
-import { watchNotifications } from "./notify.js";
 
 // ── Configuration ───────────────────────────────────────────────────────────
 
@@ -215,29 +212,14 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 // The Telegram webhook is called by Telegram, server to server, and needs no
-// CORS. The push routes are called by the app in a browser, from whatever
-// origin it is deployed on — so they do, and only they do.
-//
-// APP_ORIGIN is a single origin rather than `*` on purpose: these routes take
-// a Firebase ID token, and a wildcard invites any page anywhere to relay one.
-// Unset means the routes are same-origin only, which is the safe default and
-// what a local `npm run dev` against a proxied app wants.
-const APP_ORIGIN = process.env.APP_ORIGIN || "";
-app.use("/push", (req, res, next) => {
-  if (APP_ORIGIN) {
-    res.set("Access-Control-Allow-Origin", APP_ORIGIN);
-    res.set("Vary", "Origin");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  }
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  return next();
-});
+// CORS — which is now the only thing this process serves. The push routes that
+// did need it moved to functions/, where they carry their own origin
+// allowlist; see functions/index.js.
 
-mountPushRoutes(app, { db, admin });
-// The native half — the iOS and Android store builds register a token here
-// rather than a Web Push subscription. See server/fcm.js.
-mountFcmRoutes(app, { db, admin });
+// Push used to be mounted here. It moved to functions/ — a notification is an
+// event, and delivering it from a long-lived listener in this process meant
+// losing every notification written while a free instance was asleep. See the
+// note at the top of functions/index.js.
 
 const telegramReady = Boolean(TELEGRAM_BOT_TOKEN && TELEGRAM_WEBHOOK_SECRET);
 
@@ -257,9 +239,6 @@ app.get("/health", (_req, res) => {
       webhookSecret: Boolean(TELEGRAM_WEBHOOK_SECRET),
       ready: telegramReady,
     },
-    // Two transports, reported separately: "push is broken" is almost always
-    // one of them being unconfigured, and one number cannot say which.
-    push: { web: pushReady, fcm: fcmReady(admin) },
   });
 });
 
@@ -392,14 +371,6 @@ app.listen(PORT, () => {
   console.log(`oqunet verification server listening on :${PORT}`);
   if (!TELEGRAM_BOT_TOKEN) console.error("TELEGRAM_BOT_TOKEN is not set — every update will be refused");
   if (!TELEGRAM_WEBHOOK_SECRET) console.error("TELEGRAM_WEBHOOK_SECRET is not set — every update will be refused");
-
-  // Started here rather than at import time so that importing this module —
-  // which webhooks.test.mjs does, to drive `app` over HTTP — does not open a
-  // Firestore listener the test never closes.
-  //
-  // The cursor defaults to now, which is what stops a restart from re-pushing
-  // every unread notification in the database. See watchNotifications.
-  watchNotifications(db, admin);
 });
 
 export { app, resolveAttempt, toE164, extractToken, loadServiceAccount };

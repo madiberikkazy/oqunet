@@ -1,7 +1,7 @@
 import SettingsPage from "../../../components/SettingsPage.jsx";
 import PWASettings from "../../../components/PWASettings.jsx";
 import { t } from "../../../utils/i18n.js";
-import { APP_NAME, APP_VERSION, TERMS_URL } from "../../../utils/appInfo.js";
+import { APP_NAME, APP_VERSION, TERMS_URL, PRIVACY_URL } from "../../../utils/appInfo.js";
 import { isNative, publicUrl } from "../../../native/platform.js";
 import { externalLink } from "../../../native/browser.js";
 
@@ -39,6 +39,16 @@ export default function AboutApp() {
             className="flex items-center justify-between py-3.5"
           >
             <span className="text-[15px] text-ink-900">{t.termsOfUse}</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-ink-300">
+              <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </a>
+          <a
+            href={isNative ? publicUrl(PRIVACY_URL) : PRIVACY_URL}
+            {...externalLink(isNative ? publicUrl(PRIVACY_URL) : PRIVACY_URL)}
+            className="flex items-center justify-between py-3.5"
+          >
+            <span className="text-[15px] text-ink-900">{t.privacyPolicy}</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-ink-300">
               <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

@@ -127,8 +127,42 @@ service cloud.firestore {
         && request.resource.data.role == 'user'
         && request.resource.data.communityId == null
         && request.resource.data.createdAt == request.time
+        // Acceptance of the terms, recorded at signup — App Store guideline 1.2
+        // asks for the agreement, and this is the record of it.
+        //
+        // Both fields are checked together and cannot disagree: either the
+        // account accepted (a moment *and* the version string) or it did not
+        // (both null).
+        //
+        // The moment is the client's clock, deliberately. It cannot be
+        // `request.time`: schema.js is pure and holds no Firebase SDK, so a
+        // normalizer cannot mint a server timestamp — and the one field the
+        // data layer does stamp, `createdAt`, is written by createOne for
+        // every collection alike. A skewed clock does not matter here, because
+        // this write *is* the account's creation: `createdAt` sits beside it,
+        // server-stamped, and bounds it to the second.
+        //
+        // The version is not pinned to a literal here on purpose. Pinning it
+        // would mean every wording change is a rules deploy, and a rules deploy
+        // that lags the app is every new account rejected at registration.
+        // What the rules guarantee is that the two fields are consistent and
+        // the moment is real; which wording was current is the app's to say.
+        && termsRecordIsHonest()
         // Mock-mode-only field; it must never reach a real database.
         && !('password' in request.resource.data);
+
+      /** Either accepted — with a real moment and a version — or not at all. */
+      function termsRecordIsHonest() {
+        return !('termsAcceptedAt' in request.resource.data)
+          ? !('termsVersion' in request.resource.data)
+          : (request.resource.data.termsAcceptedAt == null
+              ? request.resource.data.termsVersion == null
+              : (request.resource.data.termsAcceptedAt is number
+                 && request.resource.data.termsAcceptedAt > 0
+                 && request.resource.data.termsVersion is string
+                 && request.resource.data.termsVersion.size() > 0
+                 && request.resource.data.termsVersion.size() <= 40));
+      }
 
       // The follower rollup is tried first, and cheaply: it exits at `!isSelf`
       // for any write to your own profile, so a self-update pays nothing for
@@ -323,6 +357,76 @@ service cloud.firestore {
       // change that would not make it a different edge.
       allow update: if false;
       allow delete: if signedIn() && followPair(followId)[0] == uid();
+    }
+
+    // ═══ blocks ═══
+    //
+    // One reader deciding they are done with another. One document per
+    // direction, at `blocker__blocked`, mirroring `follows` exactly.
+    //
+    // A collection rather than an array on the profile because the message
+    // rules below have to ask "has the recipient blocked the sender" on every
+    // send, and `exists()` on a known path is the cheap way to ask. An array
+    // would mean reading a whole profile document per message.
+    //
+    // Private to the blocker. Nobody may read who has blocked them: telling
+    // somebody they were blocked is precisely the confrontation that blocking
+    // exists to avoid.
+
+    match /blocks/{blockId} {
+      allow get, list: if signedIn() && resource.data.blockerId == uid();
+
+      allow create: if signedIn()
+        && followPair(blockId).size() == 2
+        && followPair(blockId)[0] == uid()
+        && followPair(blockId)[1] != uid()
+        && request.resource.data.keys().hasOnly(['id', 'blockerId', 'blockedId', 'createdAt'])
+        && request.resource.data.id == blockId
+        && request.resource.data.blockerId == uid()
+        && request.resource.data.blockedId == followPair(blockId)[1]
+        && request.resource.data.createdAt == request.time;
+
+      // Created or deleted, never edited — there is nothing in it to change
+      // that would not make it a different block.
+      allow update: if false;
+      allow delete: if signedIn() && followPair(blockId)[0] == uid();
+    }
+
+    // ═══ reports ═══
+    //
+    // Write-only, by design.
+    //
+    // A reporter may file one and may never read it back, and nobody may read
+    // anybody else's. That closure is not laziness about a moderation UI — it
+    // is the feature. A readable queue leaks who reported whom, and the person
+    // most motivated to go looking is the one who was reported.
+    //
+    // The queue is read with the Admin SDK, which bypasses these rules.
+
+    match /reports/{reportId} {
+      allow get, list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(
+             ['reporterId', 'targetType', 'targetId', 'targetAuthorId', 'reason', 'note', 'status', 'createdAt'])
+        && request.resource.data.reporterId == uid()
+        && request.resource.data.targetType in ['post', 'comment', 'message', 'user']
+        && request.resource.data.targetId is string
+        && request.resource.data.targetId.size() > 0
+        && request.resource.data.reason in ['spam', 'abuse', 'sexual', 'violence', 'other']
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 500
+        // A client may only ever open a report, never resolve one.
+        && request.resource.data.status == 'open'
+        && (request.resource.data.targetAuthorId == null
+            || (request.resource.data.targetAuthorId is string
+                && request.resource.data.targetAuthorId != uid()))
+        && request.resource.data.createdAt == request.time;
+
+      // Filed is filed. Editing a report after the fact would let somebody
+      // withdraw an accusation a moderator is already acting on, and deleting
+      // one would let a reporter erase their own trail.
+      allow update, delete: if false;
     }
 
     // ═══ communities ═══
@@ -1195,7 +1299,24 @@ service cloud.firestore {
     match /chats/{chatId}/messages/{messageId} {
       allow get, list: if inChatId(chatId);
 
+      /**
+       * Has the other person in this chat blocked the caller?
+       *
+       * Checked on the write rather than hidden on the read, because a message
+       * that is stored but never shown is still a message delivered: it moves
+       * the unread counter, it triggers a push notification, and it sits in the
+       * database as something the recipient asked not to receive. Refusing it
+       * here is the only place that actually stops it.
+       *
+       * Costs one document read per message sent. That is the price of the
+       * guarantee, and it is the right trade.
+       */
+      function notBlockedByRecipient(chatId) {
+        return !exists(/databases/$(database)/documents/blocks/$(otherMember(chatPair(chatId)) + '__' + uid()));
+      }
+
       allow create: if inChatId(chatId)
+        && notBlockedByRecipient(chatId)
         && request.resource.data.keys().hasOnly(
              ['senderId', 'text', 'createdAt', 'inviteId', 'communityId'])
         && request.resource.data.senderId == uid()

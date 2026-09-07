@@ -16,9 +16,8 @@ import { getUsernameEntry } from "../../firebase/firestore.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useLang } from "../../contexts/LanguageContext.jsx";
 import { t, SUPPORTED_LANGS } from "../../utils/i18n.js";
+import TermsDialog from "../../components/TermsDialog.jsx";
 import { usePhotoPicker } from "../../native/usePhotoPicker.js";
-import { publicUrl } from "../../native/platform.js";
-import { externalLink } from "../../native/browser.js";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -38,6 +37,7 @@ export default function Register() {
   });
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [termsOpen, setTermsOpen] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -235,6 +235,7 @@ export default function Register() {
         address: form.address,
         notificationsEnabled: form.notificationsEnabled,
         photoURL,
+        acceptedTerms: form.acceptedTerms,
       });
       setUser(profile);
       navigate("/", { replace: true });
@@ -544,30 +545,50 @@ export default function Register() {
               </button>
             )}
 
-            {/* Terms of Use agreement — mandatory */}
-            <label className="flex items-start gap-3 pt-5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={form.acceptedTerms}
-                onChange={(e) => update("acceptedTerms", e.target.checked)}
-                className="w-5 h-5 mt-0.5 shrink-0 accent-brand-500"
-              />
-              <span className="text-[14px] leading-snug">
-                {t.registerAcceptTerms.split(t.registerAcceptTermsLink)[0]}
-                {/* The published copy, not the bundled one. Inside the binary
-                    "/drawable/…" is a path in the app's own container that no
-                    other app can open — so the link has to name the website. */}
-                <a
-                  href={publicUrl("/drawable/TermsofUse.docx.pdf")}
-                  {...externalLink(publicUrl("/drawable/TermsofUse.docx.pdf"))}
-                  className="text-brand-500 underline underline-offset-2"
-                  onClick={(e) => e.stopPropagation()}
+            {/* Terms of Use — read and agreed inside the app.
+                A checkbox beside a link records that somebody ticked a box; it
+                does not record that they were shown anything. This opens the
+                text itself, gates "agree" on reaching the end of it, and the
+                acceptance is written onto the profile with the version of the
+                wording that was on screen. See components/TermsDialog.jsx and
+                the terms fields in firebase/schema.js. */}
+            <div className="pt-5">
+              {form.acceptedTerms ? (
+                <button
+                  type="button"
+                  onClick={() => setTermsOpen(true)}
+                  className="w-full flex items-center gap-3 rounded-2xl bg-okSoft px-4 py-3.5 text-left"
                 >
-                  {t.registerAcceptTermsLink}
-                </a>
-                {t.registerAcceptTerms.split(t.registerAcceptTermsLink)[1] || ""}
-              </span>
-            </label>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                    <path d="M5 13l4 4L19 7" stroke="#22c55e" strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-medium text-ink-900">{t.termsAccepted}</span>
+                    <span className="block text-[12px] text-ink-500">{t.termsOpen}</span>
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTermsOpen(true)}
+                  className="w-full flex items-center gap-3 rounded-2xl bg-brand-50 border border-brand-200 px-4 py-3.5 text-left"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0 text-brand-500">
+                    <path d="M7 4h7l5 5v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"
+                      stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                    <path d="M13 4v6h6" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                  </svg>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-medium text-brand-700">{t.termsOpen}</span>
+                    <span className="block text-[12px] text-brand-500">{t.termsRequired}</span>
+                  </span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-brand-400">
+                    <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </>
         )}
 
@@ -606,6 +627,15 @@ export default function Register() {
           </>
         )}
       </div>
+      <TermsDialog
+        open={termsOpen}
+        onAgree={() => { update("acceptedTerms", true); setTermsOpen(false); }}
+        // Declining un-ticks it as well as closing: somebody who read the terms
+        // and said no must not be left in the accepted state they were in
+        // before they opened it.
+        onDecline={() => { update("acceptedTerms", false); setTermsOpen(false); }}
+      />
+
     </MobileShell>
   );
 }

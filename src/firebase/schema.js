@@ -26,6 +26,7 @@ import {
   addReadingSeconds, clampSessionSeconds, dayKey, totalReadingSeconds,
 } from "../utils/readingProgress.js";
 import { searchPrefixes } from "../utils/search.js";
+import { TERMS_VERSION } from "../content/terms.js";
 import { toMillis } from "../utils/time.js";
 import { isPageBand, clampPages, loanDaysForPages } from "../utils/bookPages.js";
 import {
@@ -142,6 +143,21 @@ export const userSchema = Object.freeze({
     // rather than testing for one; accounts created before follows existed have
     // neither field, which is why every reader of them defaults to 0.
     followersCount: 0, followingCount: 0,
+    // When this person accepted the terms, and which wording they accepted.
+    //
+    // Stored rather than assumed, because "they must have agreed, the form
+    // would not submit otherwise" is not something anybody can produce when it
+    // is asked for — and it is asked for: App Store guideline 1.2 requires an
+    // app carrying user content to have its terms agreed to at signup, and a
+    // dispute about what somebody agreed to is a dispute about the wording on
+    // the day they agreed.
+    //
+    // The version is a date (see src/content/terms.js). Null on both fields
+    // means an account created before this existed; that is a real state and
+    // readers should treat it as "has not accepted the current wording"
+    // rather than as a bug.
+    termsAcceptedAt: null,
+    termsVersion: null,
   }),
   immutable: Object.freeze(["email", "createdAt"]),
   serverOwned: SERVER_OWNED_FIELDS,
@@ -205,6 +221,12 @@ export function normalizeNewUser(payload) {
     // rules assert both, so deriving them here means a caller cannot try.
     role: "user",
     communityId: null,
+    // Derived, not carried: the caller says *whether* the terms were accepted,
+    // and this decides what that means. A client that could name its own
+    // timestamp and its own version string could claim to have accepted a
+    // wording that never existed.
+    termsAcceptedAt: payload.acceptedTerms ? Date.now() : null,
+    termsVersion: payload.acceptedTerms ? TERMS_VERSION : null,
   };
 
   // Mock mode keeps the password on the profile so nickname login can work
@@ -1495,4 +1517,149 @@ export function normalizeReadingProgress({ readingDays, dayKey: key, seconds, en
     readingSeconds: totalReadingSeconds(days),
     lastReadAt: toMillis(endedAt, Date.now()),
   };
+}
+
+// ---------- reports ----------
+//
+// Somebody telling us a piece of content, or a person, does not belong here.
+//
+// This exists because an app carrying posts, comments and private messages has
+// to give readers a way to flag what they find — App Store guideline 1.2 says
+// so, and the guideline is right: without it the only thing a reader can do
+// about abuse is leave.
+//
+// A report is a *record*, not an action. Nothing is hidden or deleted by
+// filing one, and the reporter is told exactly that, because a report that
+// quietly did nothing visible would train people to stop filing them. What it
+// does is put the thing in front of a human, with enough context to find it
+// again: what kind of thing, which one, who wrote it, and who objected.
+//
+// `targetAuthorId` is copied off the content at report time rather than looked
+// up later. A post can be deleted between the report and somebody reading it,
+// and a report that can no longer say who wrote the thing is a report nobody
+// can act on.
+
+/** What can be reported. A closed set — an unknown kind is a caller's bug. */
+export const REPORT_TARGETS = Object.freeze(["post", "comment", "message", "user"]);
+
+/**
+ * Why. A closed set as well, and deliberately short: a long list makes people
+ * choose carefully instead of reporting, and every one of these ends in the
+ * same place. `other` carries the reporter's own words in `note`.
+ */
+export const REPORT_REASONS = Object.freeze(["spam", "abuse", "sexual", "violence", "other"]);
+
+/** How much of their own explanation a reporter may attach. */
+export const REPORT_NOTE_MAX = 500;
+
+export const reportSchema = Object.freeze({
+  collection: "reports",
+  required: Object.freeze(["reporterId", "targetType", "targetId", "reason", "status"]),
+  defaults: Object.freeze({ targetAuthorId: null, note: "", status: "open" }),
+  serverOwned: SERVER_OWNED_FIELDS,
+});
+
+export function normalizeNewReport(payload) {
+  requirePayload("reports", payload);
+  const reporterId = requiredId("reports", "reporterId", payload.reporterId);
+  const targetType = str(payload.targetType);
+  const targetId = requiredId("reports", "targetId", payload.targetId);
+  const reason = str(payload.reason);
+
+  if (!REPORT_TARGETS.includes(targetType)) {
+    throw new SchemaError(`reports: unknown targetType "${targetType}"`, {
+      collection: "reports", field: "targetType",
+    });
+  }
+  if (!REPORT_REASONS.includes(reason)) {
+    throw new SchemaError(`reports: unknown reason "${reason}"`, {
+      collection: "reports", field: "reason",
+    });
+  }
+
+  const targetAuthorId = str(payload.targetAuthorId) || null;
+  // Reporting yourself is not a thing anybody means to do, and a report
+  // against your own content is noise in the queue.
+  if (targetAuthorId && targetAuthorId === reporterId) {
+    throw new SchemaError("reports: nobody reports themselves", {
+      collection: "reports", field: "targetAuthorId", errorKey: "reportSelfError",
+    });
+  }
+  if (targetType === "user" && targetId === reporterId) {
+    throw new SchemaError("reports: nobody reports themselves", {
+      collection: "reports", field: "targetId", errorKey: "reportSelfError",
+    });
+  }
+
+  return assertRequired("reports", {
+    reporterId,
+    targetType,
+    targetId,
+    targetAuthorId,
+    reason,
+    note: clampText(payload.note, REPORT_NOTE_MAX),
+    // Moderation state. Only ever written by whoever reads the queue — the
+    // rules refuse a client any value but this one at creation.
+    status: "open",
+  }, reportSchema.required);
+}
+
+// ---------- blocks ----------
+//
+// One reader deciding they are done with another.
+//
+// A collection with a deterministic id rather than an array on the profile,
+// for the reason `follows` is one: the security rules have to be able to ask
+// "has A blocked B" while deciding whether B may write to A, and `exists()` on
+// a known path is the only way to ask that cheaply. An array would mean
+// reading the whole profile document on every message write.
+//
+// Blocking is one-directional and private. B is never told, and B's own view
+// of A is unchanged — what changes is A's: B's posts and comments leave A's
+// screens, and B can no longer open a chat with A. Symmetry would turn a block
+// into a message of its own, which is the opposite of what somebody blocking
+// an abuser wants.
+
+export const blockSchema = Object.freeze({
+  collection: "blocks",
+  required: Object.freeze(["id", "blockerId", "blockedId"]),
+  defaults: Object.freeze({}),
+  serverOwned: SERVER_OWNED_FIELDS,
+});
+
+/**
+ * The document id for one direction of one block.
+ *
+ * Deterministic, so blocking twice overwrites one row instead of accumulating
+ * duplicates, and so the rules can name the path without a query. Ordered
+ * blocker-then-blocked because the two directions are different facts that
+ * must be able to coexist.
+ */
+export function blockIdFor(blockerId, blockedId) {
+  const blocker = requiredId("blocks", "blockerId", blockerId);
+  const blocked = requiredId("blocks", "blockedId", blockedId);
+
+  if (blocker === blocked) {
+    throw new SchemaError("blocks: nobody blocks themselves", {
+      collection: "blocks", field: "blockedId", errorKey: "blockSelfError",
+    });
+  }
+  // Two underscores, matching `followIdFor`. The security rules split this id
+  // to check the pair, and a single underscore would be ambiguous the moment a
+  // uid ever contained one.
+  return `${blocker}__${blocked}`;
+}
+
+export function normalizeNewBlock(payload) {
+  requirePayload("blocks", payload);
+  const blockerId = requiredId("blocks", "blockerId", payload.blockerId);
+  const blockedId = requiredId("blocks", "blockedId", payload.blockedId);
+
+  return assertRequired("blocks", {
+    // Written into the document as well as used as the path, so a row read out
+    // of a list query knows its own id in the localStorage branch too.
+    id: blockIdFor(blockerId, blockedId),
+    blockerId,
+    blockedId,
+  }, blockSchema.required);
 }

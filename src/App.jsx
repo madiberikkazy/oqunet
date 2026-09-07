@@ -61,6 +61,8 @@ const AboutApp             = lazyRoute(() => import("./pages/user/settings/About
 const Support              = lazyRoute(() => import("./pages/user/settings/Support.jsx"));
 const CommunitySettings    = lazyRoute(() => import("./pages/user/settings/CommunitySettings.jsx"));
 const DeleteAccount        = lazyRoute(() => import("./pages/user/settings/DeleteAccount.jsx"));
+// Who this reader has blocked, and the only place a block can be undone.
+const BlockedUsers         = lazyRoute(() => import("./pages/user/settings/BlockedUsers.jsx"));
 
 // Community management. There are no admin *screens* any more — the four tabs
 // are the same app for everyone — only these two forms, which an admin reaches
@@ -219,6 +221,7 @@ export default function App() {
             <Route path="/settings/about"         element={<AboutApp />} />
             <Route path="/settings/support"       element={<Support />} />
             <Route path="/settings/community"     element={<CommunitySettings />} />
+            <Route path="/settings/blocked"       element={<BlockedUsers />} />
             <Route path="/settings/delete"        element={<DeleteAccount />} />
 
             <Route path="/community/create" element={<CreateCommunity />} />

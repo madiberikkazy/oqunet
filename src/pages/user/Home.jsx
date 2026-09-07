@@ -7,6 +7,7 @@ import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { useNotifications } from "../../contexts/NotificationContext.jsx";
 import PostCard from "../../components/PostCard.jsx";
+import ModerationMenu from "../../components/ModerationMenu.jsx";
 import { SkeletonList, PostCardSkeleton } from "../../components/Skeleton.jsx";
 import AppIcon from "../../components/AppIcon.jsx";
 import Fab from "../../components/Fab.jsx";
@@ -20,6 +21,7 @@ import { logger } from "../../utils/logger.js";
 import { attempt, release } from "../../utils/rateLimit.js";
 import { track } from "../../utils/analytics.js";
 import { newFeedSeed, orderFeed } from "../../utils/feedOrder.js";
+import { useBlocked } from "../../utils/useBlocked.js";
 import { useInfiniteScroll } from "../../utils/useIntersectionHooks.js";
 import { navIconSrc } from "../../utils/icons.js";
 import { t } from "../../utils/i18n.js";
@@ -185,6 +187,8 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [authorKey, user]);
 
+  const { isBlocked } = useBlocked();
+
   const feed = useMemo(
     () => orderFeed(ordered, { followedIds, seed: feedSeed })
       .map((p) => ({
@@ -213,7 +217,16 @@ export default function Home() {
   }, [feed.length]);
   const { sentinelRef } = useInfiniteScroll({ onLoadMore: revealMore, threshold: 400 });
 
-  const visibleFeed = useMemo(() => feed.slice(0, shown), [feed, shown]);
+  // Blocked authors leave the feed here rather than at the query: the feed is
+  // assembled from several sources — followed, community, public — and a filter
+  // at each of them is a filter one of them will eventually be missing. This is
+  // the single place every post passes through on its way to the screen.
+  const unblockedFeed = useMemo(
+    () => feed.filter((p) => !isBlocked(p.authorId)),
+    [feed, isBlocked]
+  );
+
+  const visibleFeed = useMemo(() => unblockedFeed.slice(0, shown), [unblockedFeed, shown]);
 
   // ── Likes ───────────────────────────────────────────────────────────────────
   //
@@ -516,6 +529,19 @@ export default function Home() {
                     likeCount={(p.likeCount || 0) + (pending.get(p.id)?.delta ?? 0)}
                     onLike={() => onLike(p)}
                     likeDisabled={!user?.id}
+                    // Reporting and blocking, on every post that is not the
+                    // reader's own. See components/ModerationMenu.jsx.
+                    menu={
+                      <ModerationMenu
+                        targetType="post"
+                        targetId={p.id}
+                        authorId={p.authorId}
+                        authorName={p.authorMeta
+                          ? `${p.authorMeta.firstName ?? ""} ${p.authorMeta.lastName ?? ""}`.trim()
+                            || `@${p.authorMeta.nickname ?? ""}`
+                          : ""}
+                      />
+                    }
                   />
                 </li>
               ))}
@@ -525,7 +551,7 @@ export default function Home() {
                   longer grouped that way — it is the people you follow, then
                   everything else — so a line claiming otherwise would be
                   pointing at nothing. */}
-              {shown < feed.length ? (
+              {shown < unblockedFeed.length ? (
                 <li ref={sentinelRef}>
                   <PostCardSkeleton />
                 </li>

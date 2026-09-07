@@ -3098,3 +3098,247 @@ describe("sending an invitation, end to end", () => {
     await assertFails(sendMessageBatch(as(ADMIN_A), ADMIN_A, DRIFTER));
   });
 });
+
+// ── Moderation ───────────────────────────────────────────────────────────────
+//
+// The two controls App Store guideline 1.2 requires of an app carrying user
+// content, and the rules that make them mean something. Both are here rather
+// than trusted to the UI: a block enforced only on the reader's screen is a
+// block that stops nothing, and a report queue a client can read is a list of
+// who accused whom.
+
+describe("blocks", () => {
+  const edge = (a, b) => `${a}__${b}`;
+
+  const payload = (a, b, over = {}) => ({
+    id: edge(a, b), blockerId: a, blockedId: b, createdAt: serverTimestamp(), ...over,
+  });
+
+  it("anybody may block anybody, in or out of their community", async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER_A), "blocks", edge(MEMBER_A, MEMBER_B)),
+      payload(MEMBER_A, MEMBER_B)));
+  });
+
+  it("nobody may block in somebody else's name", async () => {
+    await assertFails(setDoc(doc(as(MEMBER_A), "blocks", edge(MEMBER_B, MEMBER_C)),
+      payload(MEMBER_B, MEMBER_C)));
+  });
+
+  it("nobody blocks themselves", async () => {
+    await assertFails(setDoc(doc(as(MEMBER_A), "blocks", edge(MEMBER_A, MEMBER_A)),
+      payload(MEMBER_A, MEMBER_A)));
+  });
+
+  it("the id, the blocker and the blocked all have to agree", async () => {
+    await assertFails(setDoc(doc(as(MEMBER_A), "blocks", edge(MEMBER_A, MEMBER_B)),
+      payload(MEMBER_A, MEMBER_C)));
+  });
+
+  it("a block is created or removed, never edited", async () => {
+    const id = edge(MEMBER_A, MEMBER_B);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "blocks", id), {
+        id, blockerId: MEMBER_A, blockedId: MEMBER_B, createdAt: Date.now(),
+      });
+    });
+    await assertFails(updateDoc(doc(as(MEMBER_A), "blocks", id), { blockedId: MEMBER_C }));
+    await assertSucceeds(deleteDoc(doc(as(MEMBER_A), "blocks", id)));
+  });
+
+  it("only the blocker may undo it", async () => {
+    const id = edge(MEMBER_A, MEMBER_B);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "blocks", id), {
+        id, blockerId: MEMBER_A, blockedId: MEMBER_B, createdAt: Date.now(),
+      });
+    });
+    await assertFails(deleteDoc(doc(as(MEMBER_B), "blocks", id)));
+  });
+
+  it("a blocked sender cannot reach the person who blocked them", async () => {
+    // The rule that makes blocking mean anything. Checked on the *write*,
+    // because a message that is stored but hidden is still delivered: it moves
+    // the unread counter and fires a push notification.
+    const pair = [MEMBER_A, MEMBER_A2].sort();
+    const chatId = `${pair[0]}__${pair[1]}`;
+
+    const send = (db, senderId, recipientId) => {
+      const batch = writeBatch(db);
+      batch.set(doc(db, "chats", chatId, "messages", `m-${senderId}`), {
+        senderId, text: "hello", createdAt: serverTimestamp(),
+      });
+      batch.set(doc(db, "chats", chatId), {
+        memberIds: pair,
+        lastMessage: { senderId, text: "hello", at: serverTimestamp() },
+        updatedAt: serverTimestamp(),
+        unread: { [recipientId]: 1, [senderId]: 0 },
+      }, { merge: true });
+      return batch.commit();
+    };
+
+    // Before the block, the conversation works in both directions.
+    await assertSucceeds(send(as(MEMBER_A2), MEMBER_A2, MEMBER_A));
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "blocks", edge(MEMBER_A, MEMBER_A2)), {
+        id: edge(MEMBER_A, MEMBER_A2), blockerId: MEMBER_A, blockedId: MEMBER_A2,
+        createdAt: Date.now(),
+      });
+    });
+
+    // A blocked MEMBER_A2 can no longer write to MEMBER_A…
+    await assertFails(send(as(MEMBER_A2), MEMBER_A2, MEMBER_A));
+    // …but the block is one-directional: MEMBER_A, who made it, is unaffected.
+    await assertSucceeds(send(as(MEMBER_A), MEMBER_A, MEMBER_A2));
+  });
+
+  it("nobody may read who has blocked them", async () => {
+    const id = edge(MEMBER_A, MEMBER_B);
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "blocks", id), {
+        id, blockerId: MEMBER_A, blockedId: MEMBER_B, createdAt: Date.now(),
+      });
+    });
+    // The blocker reads their own list; the blocked person cannot read it at
+    // all. Being told you were blocked is exactly the confrontation blocking
+    // exists to avoid.
+    await assertSucceeds(getDocs(query(
+      collection(as(MEMBER_A), "blocks"), where("blockerId", "==", MEMBER_A))));
+    await assertFails(getDoc(doc(as(MEMBER_B), "blocks", id)));
+    await assertFails(getDocs(query(
+      collection(as(MEMBER_B), "blocks"), where("blockedId", "==", MEMBER_B))));
+  });
+});
+
+describe("reports", () => {
+  const filed = (over = {}) => ({
+    reporterId: MEMBER_A, targetType: "post", targetId: "some-post",
+    targetAuthorId: MEMBER_B, reason: "abuse", note: "", status: "open",
+    createdAt: serverTimestamp(), ...over,
+  });
+
+  it("a signed-in reader may file one", async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER_A), "reports", "r-1"), filed()));
+  });
+
+  it("every reportable kind is accepted", async () => {
+    for (const targetType of ["post", "comment", "message", "user"]) {
+      await assertSucceeds(setDoc(doc(as(MEMBER_A), "reports", `r-${targetType}`),
+        filed({ targetType })));
+    }
+  });
+
+  it("an unknown kind or reason is refused", async () => {
+    await assertFails(setDoc(doc(as(MEMBER_A), "reports", "r-2"),
+      filed({ targetType: "community" })));
+    await assertFails(setDoc(doc(as(MEMBER_A), "reports", "r-3"),
+      filed({ reason: "because" })));
+  });
+
+  it("nobody may file in somebody else's name", async () => {
+    await assertFails(setDoc(doc(as(MEMBER_A), "reports", "r-4"),
+      filed({ reporterId: MEMBER_B })));
+  });
+
+  it("nobody reports their own content", async () => {
+    await assertFails(setDoc(doc(as(MEMBER_A), "reports", "r-5"),
+      filed({ targetAuthorId: MEMBER_A })));
+  });
+
+  it("a client may only ever open a report, never resolve one", async () => {
+    await assertFails(setDoc(doc(as(MEMBER_A), "reports", "r-6"),
+      filed({ status: "closed" })));
+  });
+
+  it("the note has a ceiling", async () => {
+    await assertSucceeds(setDoc(doc(as(MEMBER_A), "reports", "r-7"),
+      filed({ note: "x".repeat(500) })));
+    await assertFails(setDoc(doc(as(MEMBER_A), "reports", "r-8"),
+      filed({ note: "x".repeat(501) })));
+  });
+
+  it("the queue is write-only: nobody reads a report back, not even its author", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "reports", "r-9"), {
+        reporterId: MEMBER_A, targetType: "post", targetId: "some-post",
+        targetAuthorId: MEMBER_B, reason: "abuse", note: "", status: "open",
+        createdAt: Date.now(),
+      });
+    });
+    await assertFails(getDoc(doc(as(MEMBER_A), "reports", "r-9")));
+    await assertFails(getDoc(doc(as(MEMBER_B), "reports", "r-9")));
+    await assertFails(getDocs(collection(as(MEMBER_A), "reports")));
+  });
+
+  it("filed is filed — no edits, no deletions", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "reports", "r-10"), {
+        reporterId: MEMBER_A, targetType: "post", targetId: "some-post",
+        targetAuthorId: MEMBER_B, reason: "abuse", note: "", status: "open",
+        createdAt: Date.now(),
+      });
+    });
+    await assertFails(updateDoc(doc(as(MEMBER_A), "reports", "r-10"), { reason: "spam" }));
+    await assertFails(deleteDoc(doc(as(MEMBER_A), "reports", "r-10")));
+  });
+});
+
+// ── Terms acceptance ─────────────────────────────────────────────────────────
+//
+// App Store guideline 1.2 asks that an app carrying user content have its terms
+// agreed to at signup. The agreement happens in the app (components/
+// TermsDialog.jsx); this is the record of it, and these are the rules that stop
+// the record from being fiction.
+
+describe("terms acceptance", () => {
+  const NEWCOMER = "newcomer";
+
+  /** What the app writes when somebody registers. */
+  const signup = (over = {}) => ({
+    id: NEWCOMER, email: "new@example.com", nickname: "newcomer",
+    firstName: "", lastName: "", role: "user", communityId: null,
+    termsAcceptedAt: Date.now(), termsVersion: "2026-09-07",
+    createdAt: serverTimestamp(), ...over,
+  });
+
+  it("an account may record that it accepted, with a moment and a version", async () => {
+    await assertSucceeds(setDoc(doc(as(NEWCOMER), "users", NEWCOMER), signup()));
+  });
+
+  it("both fields absent is still allowed — accounts predate this", async () => {
+    // Genuinely omitted, not set to undefined: the Firestore SDK refuses an
+    // undefined value outright, so passing one would test the client rather
+    // than the rule.
+    const { termsAcceptedAt, termsVersion, ...withoutTerms } = signup();
+    await assertSucceeds(setDoc(doc(as(NEWCOMER), "users", NEWCOMER), withoutTerms));
+  });
+
+  it("both null is allowed and means 'has not accepted'", async () => {
+    await assertSucceeds(setDoc(doc(as(NEWCOMER), "users", NEWCOMER),
+      signup({ termsAcceptedAt: null, termsVersion: null })));
+  });
+
+  it("a moment without a version is refused", async () => {
+    await assertFails(setDoc(doc(as(NEWCOMER), "users", NEWCOMER),
+      signup({ termsVersion: null })));
+    await assertFails(setDoc(doc(as(NEWCOMER), "users", NEWCOMER),
+      signup({ termsVersion: "" })));
+  });
+
+  it("a version without a moment is refused", async () => {
+    await assertFails(setDoc(doc(as(NEWCOMER), "users", NEWCOMER),
+      signup({ termsAcceptedAt: null })));
+  });
+
+  it("the moment has to be a real one", async () => {
+    await assertFails(setDoc(doc(as(NEWCOMER), "users", NEWCOMER),
+      signup({ termsAcceptedAt: "yesterday" })));
+    await assertFails(setDoc(doc(as(NEWCOMER), "users", NEWCOMER),
+      signup({ termsAcceptedAt: 0 })));
+  });
+
+  it("the version string has a ceiling", async () => {
+    await assertFails(setDoc(doc(as(NEWCOMER), "users", NEWCOMER),
+      signup({ termsVersion: "v".repeat(41) })));
+  });
+});

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import Avatar from "../../components/Avatar.jsx";
 import EmptyState from "../../components/EmptyState.jsx";
 import PostCard from "../../components/PostCard.jsx";
+import ModerationMenu from "../../components/ModerationMenu.jsx";
 import { useQueryClient } from "@tanstack/react-query";
 import { qk } from "../../lib/queryKeys.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
@@ -17,6 +18,7 @@ import { attempt, release, retryAfterSeconds } from "../../utils/rateLimit.js";
 import { track } from "../../utils/analytics.js";
 import { writeError } from "../../utils/writeError.js";
 import { formatPostStamp } from "../../utils/time.js";
+import { useBlocked } from "../../utils/useBlocked.js";
 import { t } from "../../utils/i18n.js";
 import Loading from "../../components/Loading.jsx";
 
@@ -46,6 +48,15 @@ export default function PostDetail() {
   const [loading, setLoading] = useState(true);
 
   const [comments, setComments] = useState([]);
+  const { isBlocked } = useBlocked();
+
+  // Same rule as the feed: a blocked person's words do not appear, and the
+  // filter sits at the one point every comment passes through on its way to
+  // the screen rather than at the subscription that fetched them.
+  const visibleComments = useMemo(
+    () => comments.filter((c) => !isBlocked(c.authorId)),
+    [comments, isBlocked]
+  );
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -248,18 +259,28 @@ export default function PostDetail() {
         onLike={onLike}
         likeDisabled={!user?.id}
         standalone
+        menu={
+          <ModerationMenu
+            targetType="post"
+            targetId={post.id}
+            authorId={post.authorId}
+            authorName={author
+              ? `${author.firstName ?? ""} ${author.lastName ?? ""}`.trim() || `@${author.nickname ?? ""}`
+              : ""}
+          />
+        }
       />
 
       {error ? <p className="px-4 mt-3 text-bad text-[13px]">{error}</p> : null}
 
-      {comments.length === 0 ? (
+      {visibleComments.length === 0 ? (
         <div className="px-6 py-12 text-center">
           <p className="text-ink-500 text-[14px]">{t.noComments}</p>
           <p className="text-ink-300 text-[13px] mt-1">{t.noCommentsHint}</p>
         </div>
       ) : (
         <ul>
-          {comments.map((c) => (
+          {visibleComments.map((c) => (
             <li key={c.id} className="flex gap-3 px-4 py-3 border-b border-ink-100">
               <Avatar src={c.photoURL} name={c.authorName || "?"} size={36} />
               <div className="flex-1 min-w-0">
@@ -272,6 +293,18 @@ export default function PostDetail() {
               {/* Only on your own reply. An admin may remove anybody's — the
                   rules say so — but that belongs on a moderation screen, not as
                   a bin beside every line of a conversation. */}
+              {/* Somebody else's reply: report it, or block whoever wrote it.
+                  Your own: the bin, as before. The two never appear together,
+                  which is why one ternary covers both. */}
+              {c.authorId !== user?.id ? (
+                <ModerationMenu
+                  targetType="comment"
+                  targetId={c.id}
+                  authorId={c.authorId}
+                  authorName={c.authorName || ""}
+                  triggerClassName="shrink-0 w-8 h-8 rounded-lg text-ink-300"
+                />
+              ) : null}
               {c.authorId === user?.id ? (
                 <button
                   onClick={() => removeComment(c)}

@@ -277,6 +277,13 @@
     background: var(--ink-100);
     color:      var(--ink-900);
   }
+  /* The confirming half of something that cannot be undone by tapping again —
+     blocking a person, and whatever follows it. Same shape as the other two, so
+     a dialog's two buttons are one pair; only the colour carries the warning. */
+  .btn-danger {
+    @apply w-full text-white font-semibold rounded-xl py-3.5 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed;
+    background: var(--bad);
+  }
 
   .pill {
     @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;

@@ -123,6 +123,9 @@ export default function Settings() {
       <SettingsGroup>
         <SettingsRow icon="profile"  label={t.personalData} to="/settings/profile" />
         <SettingsRow icon="security" label={t.security}     to="/settings/security" />
+        {/* Beside security rather than in a section of its own: to the reader
+            this is the same kind of thing — who is allowed near me. */}
+        <SettingsRow icon="security" label={t.blockedUsers}  to="/settings/blocked" />
       </SettingsGroup>
 
       <GroupDivider />
