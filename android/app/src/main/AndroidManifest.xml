@@ -38,7 +38,7 @@
 
             <!-- App Links, the https half — this is what a shared profile or
                  post link opens. `autoVerify` makes Android check
-                 https://oqunet.app/.well-known/assetlinks.json for this app's
+                 https://oqunet.vercel.app/.well-known/assetlinks.json for this app's
                  package name and signing fingerprint; until that file is
                  served, links open in the browser instead of the app, which is
                  the correct fallback and is why the shared URL is an https one
@@ -47,7 +47,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="oqunet.app" />
+                <data android:scheme="https" android:host="oqunet.vercel.app" />
             </intent-filter>
 
         </activity>

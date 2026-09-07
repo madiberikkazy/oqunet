@@ -36,7 +36,7 @@ export const messaging = getMessaging();
  * Origins allowed to call the registration endpoints.
  *
  * The three the app actually runs as:
- *   https://oqunet.app     the deployed site and the installed PWA
+ *   https://oqunet.vercel.app  the deployed site and the installed PWA
  *   https://localhost      the Android WebView's own scheme
  *   capacitor://localhost  the iOS WebView's
  *
@@ -45,8 +45,7 @@ export const messaging = getMessaging();
  * page on another domain cannot quietly make requests as somebody's browser.
  */
 export const ALLOWED_ORIGINS = new Set([
-  "https://oqunet.app",
-  "https://www.oqunet.app",
+  "https://oqunet.vercel.app",
   "https://localhost",
   "capacitor://localhost",
   "http://localhost:5173",

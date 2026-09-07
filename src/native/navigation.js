@@ -50,7 +50,7 @@ export const EXIT_CONFIRM_MS = 2000;
  *
  * Handles the two shapes a deep link arrives in:
  *
- *   https://oqunet.app/users/abc   an App Link / Universal Link — a real web
+ *   https://oqunet.vercel.app/users/abc   an App Link / Universal Link — a real web
  *                                  URL that the OS decided this app owns. This
  *                                  is what the share sheet puts in a chat, and
  *                                  it has to work whether or not the app is

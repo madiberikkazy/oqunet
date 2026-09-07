@@ -62,7 +62,7 @@ export function hasPlugin(name) {
  * it falls back to the production domain rather than shipping `capacitor://`
  * links to real people.
  */
-const FALLBACK_ORIGIN = "https://oqunet.app";
+const FALLBACK_ORIGIN = "https://oqunet.vercel.app";
 
 export const publicOrigin = (() => {
   const configured = import.meta.env?.VITE_PUBLIC_ORIGIN;

@@ -4,17 +4,27 @@
 
 ## 1. Сначала задеплойте сайт
 
-**До** отправки в App Store, иначе ревью упрётся в неработающие ссылки:
+**До** отправки в App Store, иначе ревью упрётся в неработающие ссылки.
+
+Сайт сейчас развёрнут старой сборкой: `privacy.html` и `terms.html` в проде
+отдают `index.html` вместо себя, потому что их ещё не было, когда деплой делался.
 
 ```bash
 npm run build   # затем обычный деплой на Vercel
 ```
 
-Проверьте, что открываются:
+Проверьте, что открываются **и отдают именно себя**, а не главную:
 
-- `https://oqunet.app/privacy.html` — App Store Connect не примет форму без рабочей ссылки
-- `https://oqunet.app/terms.html` — на неё ведёт галочка при регистрации
-- `https://oqunet.app/.well-known/apple-app-site-association` — универсальные ссылки
+```bash
+curl -s https://oqunet.vercel.app/privacy.html | grep -o '<title>[^<]*</title>'
+# должно быть: <title>Құпиялылық саясаты — OquNet</title>
+```
+
+Полный список:
+
+- `https://oqunet.vercel.app/privacy.html` — App Store Connect не примет форму без рабочей ссылки
+- `https://oqunet.vercel.app/terms.html` — на неё ведёт галочка при регистрации
+- `https://oqunet.vercel.app/.well-known/apple-app-site-association` — универсальные ссылки
 
 ## 2. Создайте приложение в App Store Connect
 
@@ -55,7 +65,7 @@ iPhone 16 Pro Max: ⌘S сохраняет кадр нужного размер�
 | User ID | да | нет | App Functionality |
 | Пользовательский контент | да | нет | App Functionality |
 
-**Privacy Policy URL**: `https://oqunet.app/privacy.html`
+**Privacy Policy URL**: `https://oqunet.vercel.app/privacy.html`
 
 **Экспортное соответствие** — вопроса не будет, ответ уже в Info.plist.
 
@@ -72,7 +82,7 @@ iPhone 16 Pro Max: ⌘S сохраняет кадр нужного размер�
 > • «Заблокировать» — там же; заблокированные исчезают из ленты, комментариев
 >   и чатов и не могут писать (запрещено правилами базы, не только интерфейсом)
 > • Список блокировок и разблокировка — Настройки → Заблокированные
-> • Условия с политикой нулевой терпимости: https://oqunet.app/terms.html
+> • Условия с политикой нулевой терпимости: https://oqunet.vercel.app/terms.html
 >   принимаются галочкой при регистрации
 > • Жалобы рассматриваются в течение 24 часов, контакт: @oqunetapp
 >
