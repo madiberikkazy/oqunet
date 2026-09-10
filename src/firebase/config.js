@@ -3,7 +3,8 @@
 // See `.env.example` for the keys. See FIREBASE_SETUP.md for step-by-step instructions.
 
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, initializeAuth, indexedDBLocalPersistence } from "firebase/auth";
+import { isNative } from "../native/platform.js";
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -27,7 +28,28 @@ export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey);
 let app, auth, db;
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
+  // `getAuth` or `initializeAuth`, and on iOS the difference is whether the app
+  // starts at all.
+  //
+  // `getAuth` is the browser convenience wrapper: it installs the default
+  // persistence *and* `browserPopupRedirectResolver`, the machinery behind
+  // signInWithPopup. That resolver wants a real http(s) origin — it prepares an
+  // iframe against the auth domain and reasons about window.opener. Inside the
+  // iOS WebView the page is served from `capacitor://localhost`, which is
+  // neither, and the resolver never finishes initialising. Nothing throws;
+  // `onAuthStateChanged` simply never fires, `AuthProvider` never leaves its
+  // loading state, and every screen sits on the Suspense fallback forever —
+  // which is exactly the "white screen with the book spinner" this fixes.
+  //
+  // `initializeAuth` takes only what is named. No popup resolver, because the
+  // native builds do not use popups: Google sign-in there goes through the
+  // native picker in native/googleAuth.js and arrives as a credential.
+  //
+  // Android was unaffected — Capacitor serves it from `https://localhost`, an
+  // origin the resolver accepts — which is why this only ever broke on iOS.
+  auth = isNative
+    ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
+    : getAuth(app);
   // `initializeFirestore` with a persistent cache rather than `getFirestore`,
   // and the difference is the whole of this app's offline story.
   //

@@ -31,8 +31,8 @@
       ]
     },
     "StatusBar": {
-      "overlaysWebView": false,
-      "style": "DEFAULT"
+      "overlaysWebView": true,
+      "style": "LIGHT"
     },
     "FirebaseAuthentication": {
       "skipNativeAuth": true,

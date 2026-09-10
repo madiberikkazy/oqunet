@@ -4,7 +4,7 @@
 // whole manifest, and so the support address has exactly one place to change.
 
 export const APP_NAME = "OquNet";
-export const APP_VERSION = "0.1.0";
+export const APP_VERSION = "1.0";
 
 /**
  * Support runs through Telegram, not email — it is where the community already
