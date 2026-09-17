@@ -1,7 +1,9 @@
 import { t } from "../utils/i18n.js";
 
 export default function BookStatusBadge({ status, daysLeft, reserved = false }) {
-  if (status === "available") return <span className="pill bg-okSoft text-ok">{t.availableStatus}</span>;
+  if (status === "available" || (daysLeft != null && daysLeft <= 0)) {
+    return <span className="pill bg-okSoft text-ok">{t.availableStatus}</span>;
+  }
   if (status === "unavailable") {
     // Off the shelf, but not being read: its owner is collecting it on the way
     // out of the community. "Unavailable" is true and useless — the person
@@ -15,7 +17,11 @@ export default function BookStatusBadge({ status, daysLeft, reserved = false }) 
     }
     return <span className="pill bg-badSoft text-bad">{t.unavailableStatus}</span>;
   }
-  if (status === "soon")
+  if (status === "soon") {
+    if (daysLeft != null && daysLeft <= 0) {
+      return <span className="pill bg-okSoft text-ok">{t.availableStatus}</span>;
+    }
     return <span className="pill bg-warnSoft text-warn">{daysLeft != null ? t.daysLeftCount(daysLeft) : t.soonStatus}</span>;
+  }
   return null;
 }

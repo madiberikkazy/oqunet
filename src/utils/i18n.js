@@ -803,7 +803,7 @@ const kz = {
   noPostsHint: "Қоғамдастықтардың жазбалары осында пайда болады",
 
   // ── Book status badge ──
-  daysLeftCount: (n) => `${n} күн қалды`,
+  daysLeftCount: (n) => `${Math.max(0, n)} күн қалды`,
 
   // ── Community profile ──
   communityNotFound: "Қоғамдастық табылмады.",
@@ -1766,7 +1766,7 @@ const ru = {
   noPostsHint: "Здесь появятся публикации ваших сообществ",
 
   // ── Book status badge ──
-  daysLeftCount: (n) => `осталось ${n} дн.`,
+  daysLeftCount: (n) => `осталось ${Math.max(0, n)} дн.`,
 
   // ── Community profile ──
   communityNotFound: "Сообщество не найдено.",
@@ -2726,7 +2726,7 @@ const en = {
   noPostsHint: "Posts from your communities will appear here",
 
   // ── Book status badge ──
-  daysLeftCount: (n) => `${n} days left`,
+  daysLeftCount: (n) => `${Math.max(0, n)} days left`,
 
   // ── Community profile ──
   communityNotFound: "Community not found.",
