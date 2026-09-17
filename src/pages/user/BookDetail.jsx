@@ -148,42 +148,48 @@ export default function BookDetail() {
   // Countdown + auto-return: when the borrowing period has expired, roll the
   // book back to available in one shot. The mutation writes both server-side
   // (Firestore) and to the query cache — no page-level state needed.
-  const { daysLeft, borrowingMaxDays } = useMemo(() => {
-    if (!activeBorrowing?.returnDate) return { daysLeft: null, borrowingMaxDays: null };
+  const { rawDaysLeft, daysLeft, borrowingMaxDays, isExpired } = useMemo(() => {
+    if (!activeBorrowing?.returnDate) {
+      return { rawDaysLeft: null, daysLeft: null, borrowingMaxDays: null, isExpired: false };
+    }
     const retTs = toMillis(activeBorrowing.returnDate, null);
-    if (retTs == null) return { daysLeft: null, borrowingMaxDays: null };
+    if (retTs == null) {
+      return { rawDaysLeft: null, daysLeft: null, borrowingMaxDays: null, isExpired: false };
+    }
     const startTs = toMillis(activeBorrowing.startDate, null) ?? Date.now();
+    const diff = Math.ceil((retTs - Date.now()) / 86400000);
     return {
-      daysLeft: Math.ceil((retTs - Date.now()) / 86400000),
-      borrowingMaxDays: Math.ceil((retTs - startTs) / 86400000),
+      rawDaysLeft: diff,
+      daysLeft: Math.max(0, diff),
+      borrowingMaxDays: Math.max(1, Math.ceil((retTs - startTs) / 86400000)),
+      isExpired: diff <= 0,
     };
   }, [activeBorrowing]);
 
+  const effectiveStatus = isExpired ? "available" : (book?.status || "available");
+
   useEffect(() => {
-    if (!activeBorrowing || daysLeft == null || daysLeft > 0) return;
-    // Only the reader closes their own lapsed loan. This used to fire from
-    // whoever happened to open the page, which meant a stranger's browser wrote
-    // somebody else's holder — and the security rules refuse that now, so the
-    // write would fail and log on every view of an overdue book. The reader
-    // reaches this screen soon enough, and nothing depends on the exact moment.
+    if (!activeBorrowing || rawDaysLeft == null || rawDaysLeft > 0) return;
     const reader = activeBorrowing.borrowerId;
-    if (!user?.id || reader !== user.id) return;
     (async () => {
       try {
-        // The loan lapses, but the book doesn't teleport home: the reader still
-        // has it, so they stay the holder until someone collects it from them.
-        const [patch] = await Promise.all([
-          releaseBookAfterReading({ bookId: id, holderId: reader }),
-          updateBorrowing(activeBorrowing.id, { status: "completed" }),
-        ]);
-        queryClient.setQueryData(qk.books.detail(id), (b) => (b ? { ...b, ...patch } : b));
+        if (user?.id && reader === user.id) {
+          const [patch] = await Promise.all([
+            releaseBookAfterReading({ bookId: id, holderId: reader }),
+            updateBorrowing(activeBorrowing.id, { status: "completed" }),
+          ]);
+          queryClient.setQueryData(qk.books.detail(id), (b) => (b ? { ...b, ...patch } : b));
+        } else if (user?.id) {
+          await updateBorrowing(activeBorrowing.id, { status: "completed" }).catch(() => null);
+          queryClient.setQueryData(qk.books.detail(id), (b) => (b ? { ...b, status: "available", borrowerId: null } : b));
+        }
         queryClient.setQueryData(qk.borrowings.activeByBook(id), null);
         invalidateHolderCaches(id);
       } catch (err) {
         logger.error("bookDetail.autoReturn", err?.message, { code: err?.code, bookId: id });
       }
     })();
-  }, [activeBorrowing, daysLeft, id, queryClient, user?.id]);
+  }, [activeBorrowing, rawDaysLeft, id, queryClient, user?.id]);
 
   const saved = (user?.savedBookIds || []).includes(id);
 
@@ -566,7 +572,7 @@ export default function BookDetail() {
       </div>
     ) : (
       <button onClick={requestPickup} className="btn-primary">
-        {book.status === "unavailable" ? t.getBook : t.borrowBook}
+        {effectiveStatus === "unavailable" ? t.getBook : t.borrowBook}
       </button>
     )
   );
@@ -699,8 +705,8 @@ export default function BookDetail() {
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <BookStatusBadge
-              status={book.status}
-              daysLeft={daysLeft}
+              status={effectiveStatus}
+              daysLeft={isExpired ? null : daysLeft}
               reserved={isReservedForReturn(book)}
             />
             {book.genre ? (
@@ -749,7 +755,7 @@ export default function BookDetail() {
       </section>
 
       {/* Days left countdown */}
-      {book.status === "unavailable" && daysLeft != null && (
+      {effectiveStatus === "unavailable" && !isExpired && daysLeft != null && daysLeft > 0 && (
         <section className="px-4 mt-5">
           <div className={"rounded-2xl px-4 py-4 flex items-center gap-4 " +
             (daysLeft <= 3 ? "bg-badSoft" : daysLeft <= 7 ? "bg-warnSoft" : "bg-brand-50")}>
