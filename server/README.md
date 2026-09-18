@@ -77,12 +77,14 @@ recoverable, just slow enough to look broken.
 The web app needs to know which bot the link opens:
 
 ```
-VITE_TELEGRAM_BOT=@oqunet_verify_bot
+VITE_TELEGRAM_BOT=oqunet_telegram_bot
 ```
 
 Vite bakes that in **at build time**, so on Vercel you set it in the project's
-environment variables and then redeploy. Leave it unset and the verify screen
-says verification is unavailable instead of offering a dead button.
+environment variables and then redeploy. Local native builds do not inherit
+Vercel's variables. An unset or blank value defaults to the production bot
+`oqunet_telegram_bot`; set a different username for a separate deployment.
+After changing the web code, run `npm run sync` before rebuilding the native app.
 
 ## What this server deliberately does not do
 
@@ -108,7 +110,8 @@ In order, because each rules out the one below:
 4. Render logs → nothing at all when you press the button? Telegram is not
    reaching you; check the URL in `getWebhookInfo`.
 5. The app's console → the attempt document has to exist before the bot can find
-   it. `VITE_TELEGRAM_BOT` unset means the link never had a token to carry.
+   it. The screen saves it first, then offers the link to Telegram. Check that
+   the configured bot belongs to this webhook and Firebase project.
 
 ## Web Push
 

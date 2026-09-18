@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import SettingsPage from "../../../components/SettingsPage.jsx";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
@@ -33,12 +33,10 @@ import { externalLink } from "../../../native/browser.js";
  * the bot resolving it is what ends the wait. Nothing here can decide the
  * answer, which is the point — see firebase/phoneVerify.js.
  *
- * ── Why the button is a link ─────────────────────────────────────────────────
- * `window.open` after an `await` is not a user gesture any more, and mobile
- * Safari blocks it — which was a verification flow that did nothing at all on
- * an iPhone. So the token is minted as soon as the number looks valid, the
- * anchor carries the real `t.me` href before anyone taps it, and writing the
- * attempt happens alongside the navigation rather than in front of it.
+ * Save the attempt before offering the link to Telegram. Switching apps can
+ * suspend an unfinished Firestore write, leaving the bot with an unknown
+ * token. A separate tap on the saved link also preserves the user gesture
+ * required by mobile browsers to open another app.
  *
  * ── And why it goes through `externalLink` ───────────────────────────────────
  * This whole flow is built on leaving the app and coming back, which a WebView
@@ -75,15 +73,6 @@ export default function PhoneVerify() {
   const unsubscribeRef = useRef(() => {});
 
   const e164 = toE164(phone);
-
-  /**
-   * The token for the attempt this tap will open, minted before the tap so the
-   * link is a real link. Tied to the number: change the number and the pending
-   * token changes with it, so a stale one can never be redeemed for a claim
-   * nobody made.
-   */
-  const token = useMemo(() => (e164 ? newVerificationToken() : null), [e164]);
-  const link = token ? verificationLink(token) : null;
 
   /** Subscribe to an attempt and let the bot's answer drive the screen. */
   const follow = useCallback((forToken) => {
@@ -129,33 +118,32 @@ export default function PhoneVerify() {
   // replaces it, `startOver` closes it, and this catches everything else.
   useEffect(() => () => unsubscribeRef.current?.(), []);
 
-  /**
-   * Open the attempt. Deliberately *not* awaited before the browser follows the
-   * anchor: the navigation to Telegram is the user's tap, and holding it back
-   * behind a round trip is what got it blocked. If the write fails the screen
-   * says so, and the bot would answer an unknown token with the same advice.
-   */
-  function handleStart(event) {
+  /** Keep the app in the foreground until the server has saved the attempt. */
+  async function handleStart() {
     if (startingRef.current) return;
-    if (!e164) { event.preventDefault(); setError(t.phoneInvalidError); return; }
-    if (changing && e164 === user.phone) { event.preventDefault(); setError(t.phoneSameAsCurrent); return; }
-    if (!available || !link) { event.preventDefault(); setError(t.phoneChannelUnavailable); return; }
+    if (!e164) { setError(t.phoneInvalidError); return; }
+    if (changing && e164 === user.phone) { setError(t.phoneSameAsCurrent); return; }
+    if (!available) { setError(t.phoneChannelUnavailable); return; }
 
     startingRef.current = true;
+    setBusy("start");
     setError("");
     setMismatch(null);
-    setPending({ token, payload: verificationPayload(token), link, phone: e164 });
-    setStatus("waiting");
-
-    startPhoneVerification({ userId: user.id, phone: e164, token })
-      .then(() => follow(token))
-      .catch((err) => {
-        logger.error("phoneVerify.start", err?.message, { code: err?.code });
-        setError(writeError(err));
-        setStatus("");
-        setPending(null);
-      })
-      .finally(() => { startingRef.current = false; });
+    try {
+      const token = newVerificationToken();
+      const started = await startPhoneVerification({ userId: user?.id, phone: e164, token });
+      setPending({ token, payload: started.payload, link: started.link, phone: started.attempt.phone });
+      setStatus("waiting");
+      follow(token);
+    } catch (err) {
+      logger.error("phoneVerify.start", err?.message, { code: err?.code });
+      setError(writeError(err));
+      setStatus("");
+      setPending(null);
+    } finally {
+      startingRef.current = false;
+      setBusy("");
+    }
   }
 
   async function startOver() {
@@ -242,6 +230,7 @@ export default function PhoneVerify() {
                 inputMode="tel"
                 autoComplete="tel"
                 value={phone}
+                disabled={busy === "start"}
                 onChange={(e) => setPhone(e.target.value.replace(/[^\d+\-() ]/g, ""))}
                 placeholder="+7 (777) 123-45-67"
                 maxLength={20}
@@ -252,22 +241,22 @@ export default function PhoneVerify() {
 
             {error ? <p className="text-bad text-[13px]">{error}</p> : null}
 
-            {/* An anchor, not a button: see the note at the top of the file. */}
-            <a
-              href={link || "#"}
-              {...externalLink(link, handleStart)}
-              aria-disabled={!available || !e164}
+            <button
+              type="button"
+              onClick={handleStart}
+              disabled={!available || !e164 || busy === "start"}
+              aria-busy={busy === "start"}
               className={
                 "w-full font-semibold rounded-xl py-3.5 transition active:scale-[0.99] " +
                 "flex items-center justify-center gap-2 text-white " +
-                (available && e164
+                (available && e164 && busy !== "start"
                   ? "bg-[#2AABEE] hover:bg-[#1E96D4]"
                   : "bg-[#2AABEE]/40 pointer-events-none")
               }
             >
               <TelegramIcon />
-              {t.phoneVerifyTelegram}
-            </a>
+              {busy === "start" ? t.loading : t.phoneVerifyTelegram}
+            </button>
 
             {!available ? (
               <p className="text-[12px] text-warn leading-snug">{t.phoneChannelUnavailable}</p>

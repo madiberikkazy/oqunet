@@ -59,6 +59,7 @@ const { withCompleteLists } = await import("../src/utils/useMemberProfile.js");
 const { newFeedSeed, orderFeed, shuffleStable } = await import("../src/utils/feedOrder.js");
 
 const { toE164, isE164 } = await import("../src/utils/validators.js");
+const { telegramBotUsername } = await import("../src/utils/telegram.js");
 
 const {
   botConfig, verificationAvailable, hasVerifiedPhone, isVerificationExpired,
@@ -1922,6 +1923,15 @@ describe("phone verification over Telegram", () => {
   const USER = "u-verify";
   const CLAIM = "+77771234567";
 
+  it("uses the production bot in local builds without Vercel environment variables", () => {
+    for (const value of [undefined, "", "   "]) {
+      botConfig.telegramBot = telegramBotUsername(value);
+      assert.equal(verificationAvailable(), true);
+      assert.equal(verificationLink("ABC123"), "https://t.me/oqunet_telegram_bot?start=VERIFY_ABC123");
+    }
+    assert.equal(telegramBotUsername(" @custom_bot "), "custom_bot");
+  });
+
   beforeEach(async () => {
     botConfig.telegramBot = "@oqunet_bot";
     store.set("oqunet:auth", JSON.stringify({ uid: USER }));
@@ -1960,6 +1970,9 @@ describe("phone verification over Telegram", () => {
     assert.equal(started.attempt.phone, CLAIM, "stored in E.164, whatever was typed");
     assert.equal(started.attempt.status, "pending");
     assert.ok(started.attempt.expiresAt > Date.now());
+    const saved = await getPhoneVerification(started.token);
+    assert.equal(saved.status, "pending", "the attempt exists before handing the link to Telegram");
+    assert.equal(readPendingVerification().token, started.token, "the attempt survives switching apps");
 
     const user = await getUserById(USER);
     assert.equal(user.phone, "", "a claim is not a verification");

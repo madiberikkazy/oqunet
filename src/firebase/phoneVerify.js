@@ -46,6 +46,7 @@ import { isE164, toE164 } from "../utils/validators.js";
 import { safeGet, safeRemove, safeSet } from "../utils/safeStorage.js";
 import { logger } from "../utils/logger.js";
 import { t } from "../utils/i18n.js";
+import { telegramBotUsername } from "../utils/telegram.js";
 
 /** The only channel. Stored on the attempt so a document says what it is. */
 export const CHANNEL = "telegram";
@@ -59,10 +60,8 @@ export const CHANNEL = "telegram";
 export const VERIFY_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Which bot to open. Unset means verification cannot be offered at all, which
- * is worth saying out loud on the screen rather than silently disabling a
- * button — on Vercel this variable is baked in at build time, so a deploy that
- * forgot it looks exactly like a broken feature.
+ * Which bot to open. Native builds don't inherit Vercel's environment, so an
+ * empty setting uses the same public bot as production.
  *
  * An object rather than an exported constant, for one reason: `import.meta.env`
  * exists under Vite and nowhere else, so a test running in plain Node reads
@@ -70,7 +69,7 @@ export const VERIFY_TTL_MS = 15 * 60 * 1000;
  * nothing in the app writes it.
  */
 export const botConfig = {
-  telegramBot: (import.meta.env?.VITE_TELEGRAM_BOT || "").trim(),
+  telegramBot: telegramBotUsername(import.meta.env?.VITE_TELEGRAM_BOT),
 };
 
 /** Survives a reload mid-flow: the screen picks the attempt back up by token. */
@@ -152,9 +151,9 @@ export function isVerificationExpired(attempt, now = Date.now()) {
  * compare the shared contact against; if they differ, the bot resolves the
  * attempt as a mismatch and the profile is left exactly as it was.
  *
- * The token is taken as an argument rather than minted here, because the screen
- * needs the link *before* the tap: a link built after an await is a link the
- * browser has stopped treating as user-initiated, and mobile Safari blocks it.
+ * The screen supplies the token and waits for this write before displaying
+ * the Telegram link. Opening that link is a separate user gesture, so it
+ * works even in browsers that block navigation after an asynchronous write.
  */
 export async function startPhoneVerification({ userId, phone, token } = {}) {
   const e164 = toE164(phone);
