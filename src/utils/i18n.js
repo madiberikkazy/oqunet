@@ -403,6 +403,33 @@ const kz = {
   coReadSearch: "Есім немесе никнейм іздеу",
   coReadJoinFailed: "Бөлмеге қосылу мүмкін болмады",
   coReadNeedCommunity: "Бірге оқу үшін қоғамдастыққа кіріңіз",
+
+  // Офлайн бірге оқу — нақты жердегі кездесу.
+  coReadOnlineTab: "Онлайн",
+  coReadOfflineTab: "Офлайн",
+  meetupSearchPeople: "Адам іздеу",
+  meetupPickGender: "Жынысыңызды таңдаңыз",
+  meetupGenderNote: "Хабарландыру тек сол жыныстағы оқырмандарға барады. Мұны Баптаулардан өзгертуге болады.",
+  meetupMale: "Ер",
+  meetupFemale: "Әйел",
+  meetupPlaceTitle: "Қай жерде оқисыз?",
+  meetupPlacePlaceholder: "Мысалы: орталық кітапхана, 2-қабат",
+  meetupPlaceRequired: "Орынды жазыңыз",
+  meetupPublish: "Іздеуді бастау",
+  meetupPlace: "Орны",
+  meetupYours: "Сіздің кездесуіңіз",
+  meetupWaiting: "Қосылатын адамды күтудеміз…",
+  meetupInvites: "Шақырулар",
+  meetupInvitesYou: (name) => `${name} бірге оқуға шақырады`,
+  meetupReadingTogether: "бірге оқып жатыр",
+  meetupNobody: "Әзірге ешкім кездесу ашпаған",
+  meetupNeedGender: "Кездесулерді көру үшін жынысыңызды таңдаңыз",
+  meetupOpenChat: "Чатты ашу",
+  meetupOpenFailed: "Кездесуді ашу мүмкін болмады",
+  meetupJoinFailed: "Кездесуге қосылу мүмкін болмады",
+  gender: "Жыныс",
+  genderNotSet: "Таңдалмаған",
+  genderSettingsNote: "Офлайн бірге оқу шақырулары тек осы жыныстағы оқырмандарға жіберіледі және солардан келеді.",
   // Community leaderboard
   searchMembers: "Мүшелерді іздеу...",
   periodWeek: "Апталық",
@@ -823,7 +850,7 @@ const kz = {
   noPostsHint: "Қоғамдастықтардың жазбалары осында пайда болады",
 
   // ── Book status badge ──
-  daysLeftCount: (n) => `${n} күн қалды`,
+  daysLeftCount: (n) => `${Math.max(0, n)} күн қалды`,
 
   // ── Community profile ──
   communityNotFound: "Қоғамдастық табылмады.",
@@ -1392,6 +1419,33 @@ const ru = {
   coReadSearch: "Поиск по имени или нику",
   coReadJoinFailed: "Не удалось войти в комнату",
   coReadNeedCommunity: "Вступите в сообщество, чтобы читать вместе",
+
+  // Офлайн-чтение вместе — встреча в реальном месте.
+  coReadOnlineTab: "Онлайн",
+  coReadOfflineTab: "Офлайн",
+  meetupSearchPeople: "Найти людей",
+  meetupPickGender: "Выберите пол",
+  meetupGenderNote: "Уведомление увидят только читатели того же пола. Это можно изменить в настройках.",
+  meetupMale: "Мужской",
+  meetupFemale: "Женский",
+  meetupPlaceTitle: "Где будете читать?",
+  meetupPlacePlaceholder: "Например: центральная библиотека, 2 этаж",
+  meetupPlaceRequired: "Укажите место",
+  meetupPublish: "Начать поиск",
+  meetupPlace: "Место",
+  meetupYours: "Ваша встреча",
+  meetupWaiting: "Ждём, кто присоединится…",
+  meetupInvites: "Приглашения",
+  meetupInvitesYou: (name) => `${name} зовёт читать вместе`,
+  meetupReadingTogether: "читают вместе",
+  meetupNobody: "Пока никто не назначил встречу",
+  meetupNeedGender: "Выберите пол, чтобы видеть встречи",
+  meetupOpenChat: "Открыть чат",
+  meetupOpenFailed: "Не удалось открыть встречу",
+  meetupJoinFailed: "Не удалось присоединиться",
+  gender: "Пол",
+  genderNotSet: "Не указан",
+  genderSettingsNote: "Приглашения на офлайн-чтение отправляются читателям того же пола и приходят только от них.",
   // Community leaderboard
   searchMembers: "Поиск участников...",
   periodWeek: "Неделя",
@@ -1802,7 +1856,7 @@ const ru = {
   noPostsHint: "Здесь появятся публикации ваших сообществ",
 
   // ── Book status badge ──
-  daysLeftCount: (n) => `осталось ${n} дн.`,
+  daysLeftCount: (n) => `осталось ${Math.max(0, n)} дн.`,
 
   // ── Community profile ──
   communityNotFound: "Сообщество не найдено.",
@@ -2371,6 +2425,33 @@ const en = {
   coReadSearch: "Search by name or nickname",
   coReadJoinFailed: "Could not join the room",
   coReadNeedCommunity: "Join a community to read together",
+
+  // Reading together offline — meeting somewhere real.
+  coReadOnlineTab: "Online",
+  coReadOfflineTab: "Offline",
+  meetupSearchPeople: "Search people",
+  meetupPickGender: "Choose your gender",
+  meetupGenderNote: "Only readers of the same gender are notified. You can change this in Settings.",
+  meetupMale: "Male",
+  meetupFemale: "Female",
+  meetupPlaceTitle: "Where will you read?",
+  meetupPlacePlaceholder: "e.g. the central library, 2nd floor",
+  meetupPlaceRequired: "Say where",
+  meetupPublish: "Start searching",
+  meetupPlace: "Place",
+  meetupYours: "Your meet-up",
+  meetupWaiting: "Waiting for somebody to join…",
+  meetupInvites: "Invitations",
+  meetupInvitesYou: (name) => `${name} invites you to read together`,
+  meetupReadingTogether: "reading together",
+  meetupNobody: "Nobody has opened a meet-up yet",
+  meetupNeedGender: "Pick your gender to see meet-ups",
+  meetupOpenChat: "Open chat",
+  meetupOpenFailed: "Could not open the meet-up",
+  meetupJoinFailed: "Could not join the meet-up",
+  gender: "Gender",
+  genderNotSet: "Not set",
+  genderSettingsNote: "Offline reading invitations go to — and come from — readers of the same gender.",
   // Community leaderboard
   searchMembers: "Search members...",
   periodWeek: "Week",
@@ -2778,7 +2859,7 @@ const en = {
   noPostsHint: "Posts from your communities will appear here",
 
   // ── Book status badge ──
-  daysLeftCount: (n) => `${n} days left`,
+  daysLeftCount: (n) => `${Math.max(0, n)} days left`,
 
   // ── Community profile ──
   communityNotFound: "Community not found.",

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#032081" />
+    <meta name="description" content="Поддержка OquNet. Поможем со входом, обменом книгами и другими вопросами о приложении. Свяжитесь с нами в WhatsApp." />
+    <title>Поддержка — OquNet</title>
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f4f6fb; color: #14213d; font: 1rem/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { min-height: 100vh; min-height: 100svh; display: grid; place-items: center; padding: 24px; }
+      .card { width: 100%; max-width: 520px; padding: 40px; background: #fff; border: 1px solid #e2e7f1; border-radius: 28px; box-shadow: 0 16px 56px #0320810a; }
+      .brand { display: flex; align-items: center; gap: 12px; font-size: 1.25rem; font-weight: 700; }
+      .brand img { width: 48px; height: 48px; border-radius: 12px; }
+      h1 { margin: 32px 0 12px; font-size: clamp(1.8rem, 6vw, 2.25rem); line-height: 1.2; letter-spacing: -.03em; }
+      p { margin: 0; color: #526078; }
+      .contact { margin: 28px 0; }
+      .button { display: flex; align-items: center; justify-content: center; min-height: 54px; padding: 12px 20px; border-radius: 14px; background: #032081; color: #fff; text-decoration: none; font-weight: 600; text-align: center; }
+      .button:hover { background: #062b9f; }
+      .phone { display: block; width: fit-content; margin: 14px auto 0; padding: 6px; color: #032081; text-underline-offset: 4px; }
+      .hint { font-size: .9375rem; }
+      footer { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 28px; padding-top: 20px; border-top: 1px solid #e2e7f1; font-size: .875rem; }
+      footer a { color: #526078; text-underline-offset: 4px; }
+      a:focus-visible { outline: 3px solid #4779e8; outline-offset: 5px; }
+      @media (max-width: 480px) { main { padding: 16px; } .card { padding: 28px 24px; border-radius: 22px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card" aria-labelledby="support-title">
+        <div class="brand"><img src="/logo.svg" alt="" width="48" height="48" /><span>OquNet</span></div>
+        <h1 id="support-title">Нужна помощь?</h1>
+        <p>Напишите в поддержку OquNet. Поможем со входом в аккаунт, обменом книгами и другими вопросами о приложении.</p>
+        <div class="contact">
+          <a class="button" href="https://wa.me/77751856015">Написать в WhatsApp</a>
+          <a class="phone" href="tel:+77751856015">+7 775 185 60 15</a>
+        </div>
+        <p class="hint">Опишите, что произошло, и укажите модель телефона. Если возникла ошибка, приложите скриншот. Не отправляйте пароли и коды подтверждения.</p>
+        <footer>
+          <a href="/privacy.html">Конфиденциальность</a>
+          <a href="/terms.html">Условия использования</a>
+        </footer>
+      </section>
+    </main>
+  </body>
+</html>

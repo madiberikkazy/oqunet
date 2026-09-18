@@ -27,6 +27,7 @@ import {
   normalizeNewReadingSession, normalizeReadingProgress,
   stripServerOwned,
   COREAD_STALE_MS, normalizeCoReadingPresence,
+  MEETUP_TTL_MS, normalizeOfflineMeetup,
 } from "./schema.js";
 import { rankByWeeklyReading } from "../utils/readingProgress.js";
 
@@ -2143,6 +2144,127 @@ export function watchCoReaders(communityId, { onRows, ...rest } = {}) {
       onRows: (rows) => {
         const now = Date.now();
         onRows(rows.filter((r) => isCoReaderPresent(r, now)));
+      },
+    }
+  );
+}
+
+// ---------- Offline reading meet-ups ----------
+//
+// See `normalizeOfflineMeetup` for the shape and why a table is a `hostId`
+// rather than a list of members. Everything below is one document — your own.
+
+/**
+ * Open a sitting, or change where yours is.
+ *
+ * A `set` at the caller's own id, so somebody who opens a second one has moved
+ * rather than multiplied. `hostId` is themselves: this is the row that makes the
+ * table exist, and everybody who joins copies its `hostId` onto their own.
+ */
+export async function openOfflineMeetup({ userId, ...rest } = {}) {
+  const row = normalizeOfflineMeetup({ ...rest, userId, hostId: userId });
+  await setOne("meetups", row.userId, row);
+  return row;
+}
+
+/**
+ * Take a seat at somebody else's.
+ *
+ * The place and the gender are copied off the host's row rather than trusted
+ * from the caller, because they are the host's to state — a joiner who could
+ * write their own would be able to move the meeting after agreeing to it. The
+ * caller passes the host's row, which every screen that can offer a Join button
+ * is already holding.
+ */
+export async function joinOfflineMeetup({ userId, meetup, name, nickname, photoURL } = {}) {
+  if (!meetup) throw new Error("joinOfflineMeetup: missing meetup");
+  const row = normalizeOfflineMeetup({
+    userId,
+    hostId: meetup.hostId ?? meetup.userId ?? meetup.id,
+    communityId: meetup.communityId,
+    gender: meetup.gender,
+    place: meetup.place,
+    name,
+    nickname,
+    photoURL,
+  });
+  await setOne("meetups", row.userId, row);
+  return row;
+}
+
+/**
+ * Why the server just refused a meet-up.
+ *
+ * Every rule on this collection turns on one comparison — the community named
+ * on the document against `myCommunity()`, which the rules read off the
+ * caller's *server-side* profile. A client cannot see that value: the
+ * `communityId` it holds came from its own cached profile, and the whole class
+ * of bug worth naming here is those two having drifted apart.
+ *
+ * So this asks the server. One read of the caller's own profile — allowed by
+ * the rules whatever else is refused — and the answer separates the only two
+ * things a `permission-denied` here can mean:
+ *
+ *   the ids agree     → the rule that would have allowed this is not on the
+ *                       server. The deployed ruleset predates the collection,
+ *                       and every operation on it falls through to the
+ *                       catch-all deny.
+ *   the ids differ    → the profile on the server belongs to a different
+ *                       community than this device thinks it does, so the
+ *                       comparison is against the wrong id.
+ *
+ * Called only from a `permission-denied` handler on a user-initiated write, so
+ * it costs one read per refusal and nothing at all when things work.
+ */
+export async function diagnoseMeetupAccess({ userId, communityId } = {}) {
+  if (!userId) return { verdict: "no-user" };
+  try {
+    const profile = await getOne("users", userId);
+    const serverCommunityId = profile?.communityId ?? null;
+    return {
+      queried: communityId ?? null,
+      serverCommunityId,
+      verdict:
+        serverCommunityId && serverCommunityId === communityId
+          ? "ids-agree: the meetups rules are not on the server — deploy firestore.rules"
+          : "ids-differ: this device's community is not the one the server profile names",
+    };
+  } catch (err) {
+    // Being unable to read your own profile is a third answer, and a louder
+    // one: it means the refusal is not about this collection at all.
+    return { verdict: "profile-unreadable", code: err?.code ?? null };
+  }
+}
+
+/** Stand up. Only ever your own seat — the table outlives it. */
+export async function leaveOfflineMeetup(userId) {
+  if (!userId) return;
+  await deleteOne("meetups", userId);
+}
+
+/** True while a sitting is recent enough to still be an arrangement. */
+export function isMeetupLive(row, now = Date.now()) {
+  return now - toMillis(row?.startedAt, 0) < MEETUP_TTL_MS;
+}
+
+/**
+ * Everybody sitting down to read in person in this community, kept open.
+ *
+ * The age filter is applied here rather than in the query, for the reason the
+ * room's staleness filter is: one equality on the community is a stable
+ * listener, and a range on a timestamp is a listener re-running against a
+ * boundary that moves every time anybody looks at it.
+ */
+export function watchOfflineMeetups(communityId, { onRows, ...rest } = {}) {
+  if (!communityId || typeof onRows !== "function") return () => {};
+  return watchCollection(
+    "meetups",
+    { where: [["communityId", "==", communityId]] },
+    {
+      ...rest,
+      onRows: (rows) => {
+        const now = Date.now();
+        onRows(rows.filter((r) => isMeetupLive(r, now)));
       },
     }
   );

@@ -75,6 +75,10 @@ export default function Settings() {
   const fullName = `${user?.firstName || ""} ${user?.lastName || ""}`.trim();
   const themeLabel = theme === "dark" ? t.themeDark : t.themeLight;
   const langLabel = SUPPORTED_LANGS.find((l) => l.code === lang)?.label || lang;
+  const genderLabel =
+    user?.gender === "male" ? t.meetupMale
+    : user?.gender === "female" ? t.meetupFemale
+    : t.genderNotSet;
 
   return (
     <MobileShell withNav={false}>
@@ -122,6 +126,17 @@ export default function Settings() {
       {/* ── Profile & security ─────────────────────────────────────────────── */}
       <SettingsGroup>
         <SettingsRow icon="profile"  label={t.personalData} to="/settings/profile" />
+        {/* Not part of Личные данные, on purpose: nothing on that screen is
+            shown to anybody but its owner, and this one decides who may invite
+            you to sit in a room with them. Its value is on the row so it can be
+            read without opening it. */}
+        <SettingsRow
+          icon="community"
+          label={t.gender}
+          to="/settings/gender"
+          value={genderLabel}
+          chevron={false}
+        />
         <SettingsRow icon="security" label={t.security}     to="/settings/security" />
         {/* Beside security rather than in a section of its own: to the reader
             this is the same kind of thing — who is allowed near me. */}

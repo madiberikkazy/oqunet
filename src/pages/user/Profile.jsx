@@ -8,6 +8,7 @@ import ProfileHeader, {
 } from "../../components/ProfileHeader.jsx";
 import ProfileStatsRow, { PROFILE_STATS } from "../../components/ProfileStatsRow.jsx";
 import ReadingProgressCard from "../../components/ReadingProgressCard.jsx";
+import MeetupFeed from "../../components/MeetupFeed.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import {
@@ -192,6 +193,24 @@ export default function Profile() {
           readers={coReaders}
         />
       </div>
+
+      {/* Who is looking for company in a real place, and whichever arrangement
+          you are part of yourself — under the same heading as the card above,
+          because it is the same subject seen from its other side. The card
+          counts minutes and offers the room on a screen; these are the people
+          offering a chair in a real one.
+
+          It used to sit below in a section of its own titled "Офлайн бірге
+          оқу", which put the words "бірге оқу" in two headings a few hundred
+          pixels apart and made one thing look like two features.
+
+          This is also where an offline invitation lands — there is no
+          notification for one, deliberately, and MeetupFeed explains why at
+          length: an invitation to be somewhere at four o'clock is a fact about
+          right now, and an inbox is the wrong shape for something that stops
+          being true. It draws nothing when there is nothing, so on most visits
+          the section is just the card above. */}
+      <MeetupFeed user={user} communityId={community?.id} className="px-4 mt-2.5" />
 
       <div className="h-4" />
     </MobileShell>
