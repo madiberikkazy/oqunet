@@ -156,6 +156,7 @@ const kz = {
   signIn: "Кіру",
   signUp: "Тіркелу",
   signInWithGoogle: "Google арқылы кіру",
+  signInWithApple: "Apple арқылы кіру",
   signUpWithGoogle: "Google арқылы тіркелу",
   noAccount: "Аккаунтыңыз жоқ па?",
   haveAccount: "Аккаунтыңыз бар ма?",
@@ -164,6 +165,10 @@ const kz = {
   loginErrorTooMany: "Тым көп әрекет. Кейінірек қайталаңыз.",
   loginErrorGeneric: "Кіру қатесі",
   googleSignInError: "Google арқылы кіру қатесі",
+  appleSignInError: "Apple арқылы кіру қатесі",
+  acceptTermsPrefix: "Жалғастыру арқылы сіз мына құжатпен келісесіз (EULA):",
+  loginTermsNotice: "Кіру арқылы сіз келесі құжатпен келісесіз (EULA):",
+  zeroToleranceNotice: "Қабылданбайтын контент немесе дөрекі қолданушыларға нөлдік төзімділік саясаты (Zero Tolerance).",
 
   // Auth — common fields
   email: "Email",
@@ -1177,6 +1182,7 @@ const ru = {
   signIn: "Войти",
   signUp: "Регистрация",
   signInWithGoogle: "Войти через Google",
+  signInWithApple: "Войти с Apple",
   signUpWithGoogle: "Зарегистрироваться через Google",
   noAccount: "Нет аккаунта?",
   haveAccount: "Есть аккаунт?",
@@ -1185,6 +1191,10 @@ const ru = {
   loginErrorTooMany: "Слишком много попыток. Попробуйте позже.",
   loginErrorGeneric: "Ошибка входа",
   googleSignInError: "Ошибка входа через Google",
+  appleSignInError: "Ошибка входа через Apple",
+  acceptTermsPrefix: "Продолжая, вы соглашаетесь с документом (EULA):",
+  loginTermsNotice: "Входя в аккаунт, вы соглашаетесь с документом (EULA):",
+  zeroToleranceNotice: "Политика нулевой терпимости (Zero Tolerance) к нежелательному контенту и оскорбительным пользователям.",
 
   // Auth — common fields
   email: "Email",
@@ -2183,6 +2193,7 @@ const en = {
   signIn: "Sign in",
   signUp: "Sign up",
   signInWithGoogle: "Sign in with Google",
+  signInWithApple: "Sign in with Apple",
   signUpWithGoogle: "Sign up with Google",
   noAccount: "No account?",
   haveAccount: "Already have an account?",
@@ -2191,6 +2202,10 @@ const en = {
   loginErrorTooMany: "Too many attempts. Try again later.",
   loginErrorGeneric: "Sign-in error",
   googleSignInError: "Google sign-in failed",
+  appleSignInError: "Apple sign-in failed",
+  acceptTermsPrefix: "By continuing, you agree to our End User License Agreement (EULA):",
+  loginTermsNotice: "By signing in, you agree to our End User License Agreement (EULA):",
+  zeroToleranceNotice: "There is no tolerance for objectionable content or abusive users.",
 
   // Auth — common fields
   email: "Email",

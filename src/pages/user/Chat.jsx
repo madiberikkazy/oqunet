@@ -21,6 +21,7 @@ import { t } from "../../utils/i18n.js";
 import { writeError } from "../../utils/writeError.js";
 import { LIMITS } from "../../utils/validators.js";
 import Loading from "../../components/Loading.jsx";
+import ModerationMenu from "../../components/ModerationMenu.jsx";
 
 /**
  * One conversation.
@@ -342,6 +343,9 @@ export default function Chat() {
               </svg>
             </button>
           ) : null}
+
+          {/* Moderation menu for UGC compliance (Report / Block) */}
+          <ModerationMenu targetType="user" targetId={peerId} authorId={peerId} />
         </div>
       </header>
 

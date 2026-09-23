@@ -37,10 +37,10 @@ export const TERMS_UPDATED = "7 сентября 2026";
  *   { list: [...] }    a bulleted list
  *   { callout, body }  the boxed clause — used once, for zero tolerance
  */
-export const TERMS_SECTIONS = [
+export const TERMS_SECTIONS_RU = [
   {
     body: [
-      { p: "OquNet — приложение для обмена бумажными книгами внутри сообществ. Регистрируясь и пользуясь приложением, вы соглашаетесь с этими условиями. Если вы с ними не согласны, не пользуйтесь приложением." },
+      { p: "OquNet — приложение для обмена бумажными книгами внутри сообществ. Данный документ является Лицензионным соглашением с конечным пользователем (EULA). Регистрируясь и пользуясь приложением, вы соглашаетесь с этими условиями. Если вы с ними не согласны, не пользуйтесь приложением." },
     ],
   },
   {
@@ -58,11 +58,8 @@ export const TERMS_SECTIONS = [
     heading: "2. Правила поведения и содержания",
     body: [
       {
-        // The clause App Store guideline 1.2 requires of an app carrying user
-        // content. Boxed in both renderings because a reviewer looks for it
-        // and a reader should not be able to scroll past it.
         callout: "Нулевая терпимость",
-        body: "В OquNet действует политика нулевой терпимости к неприемлемому содержанию и к оскорбительному поведению. Аккаунты, нарушающие эти правила, блокируются без предупреждения и без возврата каких-либо средств.",
+        body: "В OquNet действует политика нулевой терпимости к неприемлемому содержанию и к оскорбительному поведению (there is no tolerance for objectionable content or abusive users). Аккаунты, нарушающие эти правила, блокируются без предупреждения и без возврата каких-либо средств.",
       },
       { p: "Запрещено размещать, пересылать или иным образом распространять содержание, которое:" },
       { list: [
@@ -122,3 +119,94 @@ export const TERMS_SECTIONS = [
     ],
   },
 ];
+
+export const TERMS_SECTIONS_EN = [
+  {
+    body: [
+      { p: "OquNet is an app for sharing physical books within communities. This document is the End User License Agreement (EULA). By registering and using the app, you agree to these terms. If you do not agree, do not use the app." },
+    ],
+  },
+  {
+    heading: "1. Account",
+    body: [
+      { list: [
+        "You must be at least 13 years old.",
+        "You are responsible for keeping your password secure and for all activities under your account.",
+        "Provide accurate information. One person — one account.",
+        "You can delete your account at any time: Settings → Delete account.",
+      ] },
+    ],
+  },
+  {
+    heading: "2. Rules of Conduct and Content",
+    body: [
+      {
+        callout: "Zero Tolerance",
+        body: "There is no tolerance for objectionable content or abusive users. Accounts that violate these rules will be suspended without warning and without any refunds.",
+      },
+      { p: "You are prohibited from posting, sending, or otherwise distributing content that:" },
+      { list: [
+        "insults, humiliates, harasses, or bullies another person;",
+        "incites hatred based on nationality, religion, gender, origin, age, disability, or orientation;",
+        "contains pornography or other sexually explicit material;",
+        "depicts or promotes violence, self-harm, or contains threats;",
+        "violates the law of the Republic of Kazakhstan or anyone's rights, including copyright;",
+        "is spam, advertising, fraud, or an attempt to deceive;",
+        "reveals another person's personal data without their consent;",
+        "impersonates another person or organization.",
+      ] },
+    ],
+  },
+  {
+    heading: "3. Reporting and Moderation",
+    body: [
+      { p: "Every post, comment, chat, and profile has a 'Report' option. We review reports within 24 hours, remove the violating content, and block the accounts of offenders." },
+      { p: "You can also independently block any user: their posts and comments will disappear from your feed, and they will not be able to message you. The blocked user is not notified. You can manage your blocks in Settings." },
+    ],
+  },
+  {
+    heading: "4. Your Content",
+    body: [
+      { p: "You retain the rights to the content you write and upload. By posting content, you grant us a limited right to store and display it to other users of the app — exactly as much as is needed to run the service." },
+      { p: "We reserve the right to remove any content that violates Section 2 and to restrict or terminate access to your account." },
+    ],
+  },
+  {
+    heading: "5. Book Sharing",
+    body: [
+      { p: "OquNet helps you agree on the exchange of physical books but does not participate in the transfer itself. Arrangements regarding the meeting, condition, and return of the book are strictly between its owner and the reader. We are not responsible for the loss or damage of books and are not a party to these relationships. Be careful when meeting strangers." },
+    ],
+  },
+  {
+    heading: "6. Termination of Access",
+    body: [
+      { p: "We may suspend or terminate your access to your account for violations of these terms. You can stop using the app and delete your account at any time." },
+    ],
+  },
+  {
+    heading: "7. No Warranties",
+    body: [
+      { p: "The application is provided 'as is'. We do not guarantee uninterrupted operation and are not responsible for indirect damages resulting from the use or inability to use the service, to the extent permitted by applicable law." },
+    ],
+  },
+  {
+    heading: "8. Changes",
+    body: [
+      { p: "We may update these terms. We will show significant changes in the app. By continuing to use OquNet after an update, you accept the new version." },
+    ],
+  },
+  {
+    heading: "9. Contact Us",
+    body: [
+      { p: "Telegram: @oqunetapp" },
+    ],
+  },
+];
+
+// Fallback for build-legal.mjs
+export const TERMS_SECTIONS = TERMS_SECTIONS_EN;
+
+export function getTermsSections(lang) {
+  if (lang === "en") return TERMS_SECTIONS_EN;
+  return TERMS_SECTIONS_RU;
+}

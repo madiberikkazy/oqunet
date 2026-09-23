@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   GoogleAuthProvider,
+  OAuthProvider,
   signInWithPopup,
   sendEmailVerification,
   sendPasswordResetEmail,
@@ -19,6 +20,7 @@ import {
 } from "firebase/auth";
 import { auth, isFirebaseConfigured } from "./config.js";
 import { googleCredential, hasNativeGoogleAuth, signOutNativeGoogle } from "../native/googleAuth.js";
+import { appleCredential, hasNativeAppleAuth } from "../native/appleAuth.js";
 import {
   createUserDoc,
   claimUsername,
@@ -624,9 +626,60 @@ export async function signInWithGoogle() {
       lastName,
       photoURL: fbUser.photoURL || "",
       notificationsEnabled: true,
+      acceptedTerms: true,
       role: "user",
       communityId: null,
       // No `createdAt`: createUserDoc stamps it server-side.
+    };
+    await createUserDoc(profile);
+    await claimUsername(nickname, { uid: fbUser.uid, email: profile.email });
+  }
+
+  writeMock({ uid: fbUser.uid });
+  return profile;
+}
+
+export async function signInWithApple() {
+  if (!isFirebaseConfigured) {
+    throw new Error("Apple sign-in requires Firebase. Configure .env first.");
+  }
+
+  let fbUser;
+  if (hasNativeAppleAuth) {
+    const credential = await appleCredential();
+    if (!credential) return null;
+    fbUser = (await signInWithCredential(auth, credential)).user;
+  } else {
+    fbUser = (await signInWithPopup(auth, new OAuthProvider('apple.com'))).user;
+  }
+
+  let profile = await getUserById(fbUser.uid);
+
+  if (!profile) {
+    const nameParts = (fbUser.displayName || "").split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName  = nameParts.slice(1).join(" ") || "";
+
+    const base = (fbUser.email || "appleuser").split("@")[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, "");
+    let nickname = base || "appleuser";
+    let suffix = 1;
+    while (await isNicknameTaken(nickname, fbUser.uid)) {
+      nickname = base + suffix++;
+    }
+
+    profile = {
+      id: fbUser.uid,
+      email: (fbUser.email || "").toLowerCase(),
+      nickname,
+      firstName,
+      lastName,
+      photoURL: fbUser.photoURL || "",
+      notificationsEnabled: true,
+      acceptedTerms: true,
+      role: "user",
+      communityId: null,
     };
     await createUserDoc(profile);
     await claimUsername(nickname, { uid: fbUser.uid, email: profile.email });

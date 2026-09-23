@@ -9,6 +9,7 @@ import {
   resendVerificationEmail,
   cancelPendingRegistration,
   signInWithGoogle,
+  signInWithApple,
 } from "../../firebase/auth.js";
 import { logger } from "../../utils/logger.js";
 import { IMAGE_SIZES, uploadImage } from "../../firebase/storage.js";
@@ -18,6 +19,7 @@ import { useLang } from "../../contexts/LanguageContext.jsx";
 import { t, SUPPORTED_LANGS } from "../../utils/i18n.js";
 import TermsDialog from "../../components/TermsDialog.jsx";
 import { usePhotoPicker } from "../../native/usePhotoPicker.js";
+import { isNative } from "../../native/platform.js";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -377,8 +379,34 @@ export default function Register() {
               />
             </label>
 
+            {/* Checkbox moved to step 1 to satisfy Guideline 1.2 */}
+            <label className="flex items-start gap-3 mt-4 mb-2">
+              <input
+                type="checkbox"
+                name="acceptedTerms"
+                checked={form.acceptedTerms}
+                onChange={handleChange}
+                className="mt-1 flex-shrink-0"
+              />
+              <span className="text-[13px] text-ink-500 leading-snug">
+                {t.acceptTermsPrefix}{" "}
+                <button
+                  type="button"
+                  onClick={() => setTermsOpen(true)}
+                  className="text-brand-500 underline"
+                >
+                  {t.termsOfUse}
+                </button>
+                . {t.zeroToleranceNotice}
+              </span>
+            </label>
+
+            <button type="submit" className="btn-primary">
+              {verifyBusy ? "..." : t.next}
+            </button>
+
             {/* Divider */}
-            <div className="flex items-center gap-3 py-1">
+            <div className="flex items-center gap-3 py-1 mt-3">
               <div className="flex-1 h-px bg-ink-200" />
               <span className="text-[12px] text-ink-400">{t.or}</span>
               <div className="flex-1 h-px bg-ink-200" />
@@ -395,7 +423,20 @@ export default function Register() {
               {googleBusy ? "..." : t.signUpWithGoogle}
             </button>
 
-            <p className="text-center text-[14px] text-ink-500 pt-1">
+            {/* Apple sign-in (only on native) */}
+            {isNative && (
+              <button
+                type="button"
+                disabled={appleBusy}
+                onClick={onApple}
+                className="w-full flex items-center justify-center gap-3 py-3 mt-3 rounded-2xl border border-ink-200 bg-ink-900 text-white font-medium text-[14px] active:scale-[0.98] transition disabled:opacity-60"
+              >
+                <AppleIcon />
+                {appleBusy ? "..." : t.signInWithApple}
+              </button>
+            )}
+
+            <p className="text-center text-[14px] text-ink-500 pt-3">
               {t.haveAccount}{" "}
               <Link to="/auth/login" className="text-brand-500 font-medium">{t.signIn}</Link>
             </p>
@@ -544,51 +585,6 @@ export default function Register() {
                 <span className="text-[12px] text-brand-400">{t.pickPhotoHint}</span>
               </button>
             )}
-
-            {/* Terms of Use — read and agreed inside the app.
-                A checkbox beside a link records that somebody ticked a box; it
-                does not record that they were shown anything. This opens the
-                text itself, gates "agree" on reaching the end of it, and the
-                acceptance is written onto the profile with the version of the
-                wording that was on screen. See components/TermsDialog.jsx and
-                the terms fields in firebase/schema.js. */}
-            <div className="pt-5">
-              {form.acceptedTerms ? (
-                <button
-                  type="button"
-                  onClick={() => setTermsOpen(true)}
-                  className="w-full flex items-center gap-3 rounded-2xl bg-okSoft px-4 py-3.5 text-left"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
-                    <path d="M5 13l4 4L19 7" stroke="#22c55e" strokeWidth="2.5"
-                      strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span className="min-w-0">
-                    <span className="block text-[14px] font-medium text-ink-900">{t.termsAccepted}</span>
-                    <span className="block text-[12px] text-ink-500">{t.termsOpen}</span>
-                  </span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setTermsOpen(true)}
-                  className="w-full flex items-center gap-3 rounded-2xl bg-brand-50 border border-brand-200 px-4 py-3.5 text-left"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0 text-brand-500">
-                    <path d="M7 4h7l5 5v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"
-                      stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-                    <path d="M13 4v6h6" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-                  </svg>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[14px] font-medium text-brand-700">{t.termsOpen}</span>
-                    <span className="block text-[12px] text-brand-500">{t.termsRequired}</span>
-                  </span>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0 text-brand-400">
-                    <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              )}
-            </div>
           </>
         )}
 

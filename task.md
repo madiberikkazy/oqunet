@@ -1,0 +1,13 @@
+- [/] Guideline 4.8: Sign In With Apple
+  - [ ] Modify `capacitor.config.json`
+  - [ ] Create `src/native/appleAuth.js`
+  - [ ] Modify `src/firebase/auth.js`
+  - [ ] Add Apple Icon and Button to `Login.jsx` & `Register.jsx`
+  - [ ] Modify `ios/App/App/App.entitlements` and `project.pbxproj`
+- [ ] Guideline 1.2: EULA and Moderation
+  - [ ] Modify `src/content/terms.js` to support EN and exact Apple wording
+  - [ ] Modify `scripts/build-legal.mjs`
+  - [ ] Modify `src/components/TermsDialog.jsx`
+  - [ ] Move EULA checkbox to Step 1 in `Register.jsx` & guard Social auth
+  - [ ] Add Disclaimer + EULA link to `Login.jsx`
+  - [ ] Add `ModerationMenu` to `Chat.jsx`

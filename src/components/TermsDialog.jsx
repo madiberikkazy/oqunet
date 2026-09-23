@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Modal from "./Modal.jsx";
-import { TERMS_SECTIONS, TERMS_UPDATED, TERMS_VERSION } from "../content/terms.js";
+import { getTermsSections, TERMS_UPDATED, TERMS_VERSION } from "../content/terms.js";
 import { t } from "../utils/i18n.js";
+import { useLang } from "../contexts/LanguageContext.jsx";
 
 /**
  * The terms, inside the app, with the two buttons that make them an agreement.
@@ -27,6 +28,7 @@ import { t } from "../utils/i18n.js";
  * there is nothing to scroll to, and the gate opens immediately.
  */
 export default function TermsDialog({ open, onAgree, onDecline }) {
+  const { lang } = useLang();
   const scrollRef = useRef(null);
   const [readToEnd, setReadToEnd] = useState(false);
 
@@ -68,7 +70,7 @@ export default function TermsDialog({ open, onAgree, onDecline }) {
         className="overflow-y-auto pr-1 -mr-1 text-[14px] leading-relaxed"
         style={{ maxHeight: "48vh" }}
       >
-        {TERMS_SECTIONS.map((section, i) => (
+        {getTermsSections(lang).map((section, i) => (
           <section key={section.heading ?? `intro-${i}`} className={i ? "mt-4" : ""}>
             {section.heading ? (
               <h4 className="font-semibold text-[14px] text-ink-900 mb-1">{section.heading}</h4>

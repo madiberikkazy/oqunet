@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/MobileShell.jsx";
 import AppIcon from "../../components/AppIcon.jsx";
-import { signInWithIdentifier, signInWithGoogle, sendPasswordReset } from "../../firebase/auth.js";
+import { signInWithIdentifier, signInWithGoogle, signInWithApple, sendPasswordReset } from "../../firebase/auth.js";
 import { track } from "../../utils/analytics.js";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { t } from "../../utils/i18n.js";
 import { isEmail } from "../../utils/validators.js";
 import { logger } from "../../utils/logger.js";
+import { isNative } from "../../native/platform.js";
+import TermsDialog from "../../components/TermsDialog.jsx";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,6 +18,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [appleBusy, setAppleBusy] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
 
   // Forgot-password modal state
   const [resetOpen, setResetOpen] = useState(false);
@@ -67,6 +71,23 @@ export default function Login() {
       setError(err?.message || t.googleSignInError);
     } finally {
       setGoogleBusy(false);
+    }
+  }
+
+  async function onApple() {
+    setError("");
+    setAppleBusy(true);
+    try {
+      const profile = await signInWithApple();
+      if (!profile) return;
+      setUser(profile);
+      track("auth.signIn", { method: "apple" });
+      navigate("/", { replace: true });
+    } catch (err) {
+      track("auth.signIn.failed", { method: "apple", code: err?.code });
+      setError(err?.message || t.appleSignInError);
+    } finally {
+      setAppleBusy(false);
     }
   }
 
@@ -155,11 +176,44 @@ export default function Login() {
           {googleBusy ? "..." : t.signInWithGoogle}
         </button>
 
-        <p className="text-center text-[14px] text-ink-500 pt-2">
-          {t.noAccount}{" "}
-          <Link to="/auth/register" className="text-brand-500 font-medium">{t.signUp}</Link>
-        </p>
+        {/* Apple sign-in (only on native) */}
+        {isNative && (
+          <button
+            type="button"
+            disabled={appleBusy}
+            onClick={onApple}
+            className="w-full flex items-center justify-center gap-3 py-3 rounded-2xl border border-ink-200 bg-ink-900 text-white font-medium text-[14px] active:scale-[0.98] transition disabled:opacity-60"
+          >
+            <AppleIcon />
+            {appleBusy ? "..." : t.signInWithApple}
+          </button>
+        )}
+
+        <div className="text-center pt-2">
+          <p className="text-[12px] text-ink-400 leading-relaxed mb-3">
+            {t.loginTermsNotice}{" "}
+            <button
+              type="button"
+              onClick={() => setTermsOpen(true)}
+              className="text-brand-500 font-medium"
+            >
+              {t.termsOfUse}
+            </button>
+            . {t.zeroToleranceNotice}
+          </p>
+
+          <p className="text-[14px] text-ink-500">
+            {t.noAccount}{" "}
+            <Link to="/auth/register" className="text-brand-500 font-medium">{t.signUp}</Link>
+          </p>
+        </div>
       </form>
+
+      <TermsDialog 
+        open={termsOpen} 
+        onAgree={() => setTermsOpen(false)} 
+        onDecline={() => setTermsOpen(false)} 
+      />
 
       {/* ── Forgot-password bottom sheet ── */}
       {resetOpen && (
@@ -233,6 +287,14 @@ function GoogleIcon() {
       <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
       <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
       <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M16.365 14.896c-.033-2.67 2.193-3.957 2.29-4.015-1.24-1.802-3.176-2.046-3.864-2.072-1.645-.164-3.21.96-4.053.96-.84 0-2.12-1.12-3.483-1.09-1.78.026-3.414.97-4.327 2.544-1.852 3.19-1.26 7.9 1.106 11.295 1.157 1.666 2.52 3.535 4.305 3.47 1.73-.066 2.39-1.11 4.47-1.11 2.08 0 2.68 1.11 4.47 1.08 1.838-.033 3.016-1.68 4.16-3.34 1.32-1.92 1.866-3.784 1.89-3.882-.042-.016-3.627-1.38-3.964-4.832M14.654 6.786c.96-1.157 1.603-2.766 1.428-4.37-1.39.057-3.048.924-4.032 2.08-.88.927-1.65 2.564-1.442 4.143 1.554.12 3.085-.805 4.046-1.853" />
     </svg>
   );
 }
