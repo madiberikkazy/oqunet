@@ -1,4 +1,5 @@
 import { Suspense, useEffect } from "react";
+import { useAuth } from "./contexts/AuthContext.jsx";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useLang } from "./contexts/LanguageContext.jsx";
 import OfflineIndicator from "./components/OfflineIndicator.jsx";
@@ -20,6 +21,7 @@ import Loading from "./components/Loading.jsx";
 // first time its route renders. The two book-editing screens matter most here —
 // the large majority of accounts never open them.
 const Home               = lazyRoute(() => import("./pages/user/Home.jsx"), "/");
+const Landing            = lazyRoute(() => import("./pages/Landing.jsx"));
 const Books              = lazyRoute(() => import("./pages/user/Books.jsx"), "/books");
 const BooksFilter        = lazyRoute(() => import("./pages/user/BooksFilter.jsx"), "/books/filter");
 const BookDetail         = lazyRoute(() => import("./pages/user/BookDetail.jsx"), "/books/:id");
@@ -109,6 +111,19 @@ function useScreenTracking() {
   useEffect(() => { trackScreen(pathname); }, [pathname]);
 }
 
+
+function IndexRoute() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loading />
+      </div>
+    );
+  }
+  return user ? <Home /> : <Landing />;
+}
+
 export default function App() {
   useLang(); // re-render entire tree whenever language changes so all t.key proxies update
   // Says hello once, when the app is added to the home screen. Here rather than
@@ -131,12 +146,13 @@ export default function App() {
         <Routes>
           <Route path="/auth/register" element={<Register />} />
           <Route path="/auth/login" element={<Login />} />
+          <Route path="/" element={<IndexRoute />} />
 
           <Route element={<ProtectedRoute />}>
             {/* The four tabs are one app: an admin sees exactly what a reader
                 sees. Managing a community happens on the community's own page,
                 which is where the extra controls live. */}
-            <Route path="/" element={<Home />} />
+            
             <Route path="/books" element={<Books />} />
             {/* Before "/books/:id": react-router ranks a static segment above a
                 dynamic one, but writing them in this order keeps that visible
