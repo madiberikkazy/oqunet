@@ -52,6 +52,8 @@ const {
   PORT = 8080,
   TELEGRAM_BOT_TOKEN = "",
   TELEGRAM_WEBHOOK_SECRET = "",
+  OPENAI_API_KEY = "",
+  OPENAI_MODEL = "gpt-5.6-luna",
 } = process.env;
 // The service-account variables are deliberately not destructured here — see
 // `loadServiceAccount`.
@@ -231,6 +233,159 @@ app.use("/push", (req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   return next();
 });
+app.use("/ai", (req, res, next) => {
+  if (APP_ORIGIN) {
+    res.set("Access-Control-Allow-Origin", APP_ORIGIN);
+    res.set("Vary", "Origin");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  return next();
+});
+
+// ── AI book intake ────────────────────────────────────────────────────────
+//
+// The browser sends a resized, one-off data URL after an admin takes a cover
+// photo. The API key stays here, on the server, and the caller is verified
+// before the image leaves OquNet. This endpoint deliberately returns only
+// editable bibliographic suggestions — it never writes a book or decides who
+// owns it.
+async function aiCaller(req) {
+  const header = req.get("authorization") || "";
+  const match = /^Bearer (.+)$/.exec(header.trim());
+  if (!match) return null;
+  try {
+    const decoded = await admin.auth().verifyIdToken(match[1]);
+    return decoded.uid || null;
+  } catch {
+    return null;
+  }
+}
+
+async function aiAdminCaller(req) {
+  const uid = await aiCaller(req);
+  if (!uid) return null;
+  try {
+    const profile = await db.collection("users").doc(uid).get();
+    return profile.exists && profile.data()?.role === "admin" ? uid : null;
+  } catch (err) {
+    console.error("ai intake could not read caller role", err?.message);
+    return null;
+  }
+}
+
+function isBookImage(dataUrl) {
+  return typeof dataUrl === "string" &&
+    /^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(dataUrl) &&
+    dataUrl.length <= 1_000_000;
+}
+
+const BOOK_INTAKE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name", "author", "year", "pages", "language", "description", "genres"],
+  properties: {
+    name: { type: "string" },
+    author: { type: "string" },
+    year: { type: "string" },
+    // OquNet stores page bands, not an exact count. The client form accepts
+    // these values and still lets the admin correct an uncertain estimate.
+    pages: { type: "number", enum: [0, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600] },
+    language: { type: "string", enum: ["kk", "ru", "en", "tr", "other", ""] },
+    description: { type: "string" },
+    genres: { type: "array", items: { type: "string", enum: ["fiction", "nonfiction", "fantasy", "scifi", "thriller", "mystery", "romance", "adventure", "history", "biography", "science", "selfhelp", "business", "psychology", "philosophy", "children", "classic", "poetry", "horror", "other"] }, maxItems: 3 },
+  },
+};
+
+app.post("/ai/book-intake", express.json({ limit: "2mb" }), async (req, res) => {
+  if (!OPENAI_API_KEY) return res.status(503).json({ error: "ai-not-configured" });
+  const uid = await aiAdminCaller(req);
+  if (!uid) return res.status(401).json({ error: "unauthenticated" });
+  if (!isBookImage(req.body?.imageDataUrl)) return res.status(400).json({ error: "invalid-image" });
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        store: false,
+        input: [{
+          role: "user",
+          content: [
+            { type: "input_text", text: "Read this book cover. Return only bibliographic facts you can see or confidently infer. Use an empty string for unknown text, 0 pages only when uncertain, a supported language code, and up to three valid genre slugs from the response schema. Write a concise neutral description. Page count must be rounded UP to the nearest 50, max 600." },
+            { type: "input_image", image_url: req.body.imageDataUrl, detail: "high" },
+          ],
+        }],
+        text: { format: { type: "json_schema", name: "book_intake", strict: true, schema: BOOK_INTAKE_SCHEMA } },
+      }),
+    });
+    if (!response.ok) {
+      console.error(`ai intake rejected: ${response.status}`, await response.text());
+      return res.status(502).json({ error: "ai-upstream-failed" });
+    }
+    const body = await response.json();
+    const book = JSON.parse(body.output_text || "{}");
+    if (!book.pages) book.pages = "";
+    res.json({ book });
+  } catch (err) {
+    console.error("ai intake failed", err?.message);
+    res.status(502).json({ error: "ai-upstream-failed" });
+  }
+});
+
+function validShelf(rows) {
+  if (!Array.isArray(rows) || rows.length > 100) return null;
+  return rows.map((row) => ({
+    id: typeof row?.id === "string" ? row.id.slice(0, 120) : "",
+    name: typeof row?.name === "string" ? row.name.slice(0, 200) : "",
+    author: typeof row?.author === "string" ? row.author.slice(0, 160) : "",
+    description: typeof row?.description === "string" ? row.description.slice(0, 700) : "",
+    genres: Array.isArray(row?.genres) ? row.genres.slice(0, 3).map(String) : [],
+    language: typeof row?.language === "string" ? row.language.slice(0, 20) : "",
+    status: typeof row?.status === "string" ? row.status.slice(0, 30) : "",
+  })).filter((row) => row.id && row.name);
+}
+
+app.post("/ai/book-search", async (req, res) => {
+  if (!OPENAI_API_KEY) return res.status(503).json({ error: "ai-not-configured" });
+  if (!await aiCaller(req)) return res.status(401).json({ error: "unauthenticated" });
+  const question = typeof req.body?.question === "string" ? req.body.question.trim().slice(0, 500) : "";
+  const shelf = validShelf(req.body?.books);
+  if (!question || !shelf) return res.status(400).json({ error: "invalid-request" });
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        store: false,
+        input: `A reader asked: ${JSON.stringify(question)}\n\nChoose up to 3 books only from this OquNet shelf. Prefer available books, interpret Kazakh, Russian, and English naturally, and never invent a title or id. Shelf: ${JSON.stringify(shelf)}`,
+        text: { format: { type: "json_schema", name: "book_search", strict: true, schema: {
+          type: "object", additionalProperties: false, required: ["bookIds", "answer"], properties: {
+            bookIds: { type: "array", items: { type: "string" }, maxItems: 3 },
+            answer: { type: "string", maxLength: 220 },
+          },
+        } } },
+      }),
+    });
+    if (!response.ok) {
+      console.error(`ai finder rejected: ${response.status}`, await response.text());
+      return res.status(502).json({ error: "ai-upstream-failed" });
+    }
+    const result = JSON.parse((await response.json()).output_text || "{}");
+    const validIds = new Set(shelf.map((book) => book.id));
+    res.json({
+      bookIds: Array.isArray(result.bookIds) ? result.bookIds.filter((id) => validIds.has(id)).slice(0, 3) : [],
+      answer: typeof result.answer === "string" ? result.answer.slice(0, 220) : "",
+    });
+  } catch (err) {
+    console.error("ai finder failed", err?.message);
+    res.status(502).json({ error: "ai-upstream-failed" });
+  }
+});
 
 mountPushRoutes(app, { db, admin });
 
@@ -253,6 +408,7 @@ app.get("/health", (_req, res) => {
       ready: telegramReady,
     },
     push: { ready: pushReady },
+    ai: { ready: Boolean(OPENAI_API_KEY), model: OPENAI_API_KEY ? OPENAI_MODEL : null },
   });
 });
 
