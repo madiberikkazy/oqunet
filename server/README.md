@@ -180,3 +180,9 @@ The web app reaches these routes through `VITE_PUSH_SERVER` by default. Set
 `VITE_AI_SERVER` only when the AI service is hosted at another origin. In both
 cases add the deployed web app URL to `APP_ORIGIN` so authenticated browser
 requests receive the required CORS headers.
+
+For a Vercel frontend this means adding `VITE_PUSH_SERVER=https://<your-render-service>.onrender.com`
+or `VITE_AI_SERVER=https://<your-ai-service>` in **Vercel → Project → Settings
+→ Environment Variables**, then redeploying. If neither is set, the app will
+not post `/ai/*` to Vercel's static deployment; book search uses its local
+matching fallback and cover scanning explains that the server needs setup.
