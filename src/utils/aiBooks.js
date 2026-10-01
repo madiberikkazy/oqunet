@@ -15,6 +15,16 @@ async function token() {
 }
 
 async function post(path, body) {
+  // An empty origin would turn `/ai/...` into a request to the static Vercel
+  // deployment, where the SPA rewrite correctly answers with a 405. Refuse
+  // locally instead: the finder can use its graceful local fallback, and the
+  // scanner gives the admin a useful configuration message without console
+  // noise or a pointless network round trip.
+  if (!AI_SERVER) {
+    const error = new Error("ai-not-configured");
+    error.code = "ai-not-configured";
+    throw error;
+  }
   const idToken = await token();
   const response = await fetch(`${AI_SERVER}${path}`, {
     method: "POST",

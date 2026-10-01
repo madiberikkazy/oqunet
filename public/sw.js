@@ -20,12 +20,17 @@
 // installed app serves manifest.json from this cache, so renaming is the only
 // thing that makes a colour change reach anybody who already has the app.
 //
+// Bumped to v6: this release changes the emitted module graph. Although HTML
+// is network-first, installed clients can fall back to its cached copy while a
+// deploy is in flight; giving the shell a new namespace keeps that old HTML
+// paired with its old hashed chunks instead of mixing it with the new build.
+//
 // Rule of thumb: bump these whenever index.html or manifest.json changes in a
 // way users have to see. Hashed JS/CSS take care of themselves.
-const CACHE_NAME = 'oqunet-v5';
-const ASSET_CACHE = 'oqunet-assets-v5';
-const API_CACHE = 'oqunet-api-v5';
-const IMAGE_CACHE = 'oqunet-images-v5';
+const CACHE_NAME = 'oqunet-v6';
+const ASSET_CACHE = 'oqunet-assets-v6';
+const API_CACHE = 'oqunet-api-v6';
+const IMAGE_CACHE = 'oqunet-images-v6';
 
 // Assets to cache on install (app shell).
 // Deliberately no JS/CSS here: their filenames are content-hashed and change
