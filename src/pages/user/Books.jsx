@@ -26,6 +26,7 @@ import {
   readFilters, sortBooks, sortNeedsFullScan, writeFilters,
 } from "../../utils/bookFilters.js";
 import Modal from "../../components/Modal.jsx";
+import AiBookFinder from "../../components/AiBookFinder.jsx";
 
 const PAGE_SIZE = 25;
 
@@ -92,6 +93,7 @@ export default function Books() {
 
   const [search, setSearch] = useState("");
   const [sortOpen, setSortOpen] = useState(false);
+  const [aiFinderOpen, setAiFinderOpen] = useState(false);
 
   // How the shelf is drawn. Remembered across sessions: which of the two a
   // person reads a shelf in is a preference about their own eyes, not about
@@ -344,6 +346,7 @@ export default function Books() {
             filterActive={isFilterActive}
             rightSlot={
               <>
+                <AiFinderToggle active={aiFinderOpen} onClick={() => setAiFinderOpen((open) => !open)} />
                 <ViewToggle view={view} onToggle={toggleView} />
                 <SortToggle active={isSorted(filters)} onClick={() => setSortOpen(true)} />
               </>
@@ -352,6 +355,7 @@ export default function Books() {
         </div>
       }
     >
+      <AiBookFinder books={books} open={aiFinderOpen} onClose={() => setAiFinderOpen(false)} />
       {view === VIEW.CARD ? (
         /* One bar over both card screens — the grid of genres and a genre
            opened as a shelf are the same screen at two depths, and the bar is
@@ -584,6 +588,25 @@ export default function Books() {
         ) : null}
       </Modal>
     </MobileShell>
+  );
+}
+
+function AiFinderToggle({ active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={t.aiFinderTitle}
+      title={t.aiFinderTitle}
+      className={"icon-btn shrink-0 relative " + (active ? "bg-brand-50 text-brand-600" : "")}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 3.5 13.7 9l5.3 1.8-5.3 1.7L12 18l-1.7-5.5L5 10.8 10.3 9 12 3.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        <path d="m18.5 15 .7 2.2 2.3.8-2.3.7-.7 2.3-.8-2.3-2.2-.7 2.2-.8.8-2.2Z" fill="currentColor" />
+      </svg>
+      {!active ? <span className="ai-nav-spark" aria-hidden="true" /> : null}
+    </button>
   );
 }
 

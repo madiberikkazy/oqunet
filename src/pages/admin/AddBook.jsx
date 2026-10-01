@@ -10,6 +10,7 @@ import { useCommunity } from "../../contexts/CommunityContext.jsx";
 import { useAuth } from "../../contexts/AuthContext.jsx";
 import { t } from "../../utils/i18n.js";
 import BookFields from "../../components/BookFields.jsx";
+import AiBookScan from "../../components/AiBookScan.jsx";
 import { isPageBand } from "../../utils/bookPages.js";
 import { logger } from "../../utils/logger.js";
 
@@ -148,7 +149,7 @@ export default function AddBook() {
       </div>
 
       <div className="px-5 pt-3">
-        {step === 1 ? <Step1 form={form} update={update} /> : null}
+        {step === 1 ? <Step1 form={form} update={update} onAiFile={setCoverFile} /> : null}
         {step === 2 ? <Step2 members={filteredMembers} search={search} setSearch={setSearch} selectedId={form.ownerId} onSelect={(id) => update("ownerId", id)} /> : null}
         {step === 3 ? (
           <CoverPicker
@@ -165,10 +166,21 @@ export default function AddBook() {
   );
 }
 
-function Step1({ form, update }) {
+function Step1({ form, update, onAiFile }) {
+  function applyAiBook(raw) {
+    // The model only returns the public metadata fields. Ownership is a human
+    // decision in step two, and a scan must never silently choose it.
+    const allowed = ["name", "author", "year", "pages", "language", "description", "genres"];
+    allowed.forEach((field) => {
+      const value = raw?.[field];
+      if (value !== undefined && value !== null && value !== "") update(field, value);
+    });
+  }
+
   return (
     <div>
       <h2 className="text-xl font-bold mb-3">{t.basicData}</h2>
+      <AiBookScan onDetected={applyAiBook} onFile={onAiFile} />
       {/* The same field set the applicant fills in to join, and the same one the
           admin sees when reviewing that application — one definition, so a book
           added here and a book arriving with a join request describe the same
@@ -201,4 +213,3 @@ function Step2({ members, search, setSearch, selectedId, onSelect }) {
     </div>
   );
 }
-

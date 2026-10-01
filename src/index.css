@@ -413,9 +413,151 @@
   to   { background-position: -200% 0; }
 }
 
+/* ── OquNet AI ────────────────────────────────────────────────────────────
+   These are purposeful status motions. A cover scan has a little wait in it;
+   the moving beam and stepper show what the assistant is doing instead of
+   presenting a generic spinner that leaves the admin guessing. */
+.ai-scan-card,
+.ai-finder {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(40, 83, 175, 0.18);
+  border-radius: 20px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(119, 154, 234, 0.19), transparent 42%),
+    var(--bg-surface);
+  box-shadow: 0 8px 24px rgba(40, 83, 175, 0.08);
+}
+.ai-orb {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2853af, #8b70e8);
+  box-shadow: 0 5px 13px rgba(40, 83, 175, 0.25);
+}
+.ai-orb span {
+  width: 15px;
+  height: 15px;
+  border: 2px solid white;
+  border-radius: 6px;
+  transform: rotate(45deg);
+  animation: aiOrb 2.8s ease-in-out infinite;
+}
+.ai-orb-small { width: 34px; height: 34px; border-radius: 12px; }
+.ai-orb-small span { width: 13px; height: 13px; }
+.ai-done {
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--ok);
+  background: var(--okSoft);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ai-scan-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  color: white;
+  background: linear-gradient(105deg, #2853af, #526dcc 55%, #765ed4);
+  box-shadow: 0 7px 15px rgba(40, 83, 175, 0.2);
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.ai-scan-action span { margin-left: auto; font-size: 20px; font-weight: 400; }
+.ai-scan-action:active { transform: scale(0.985); box-shadow: 0 3px 8px rgba(40, 83, 175, 0.2); }
+.ai-scan-progress {
+  position: relative;
+  overflow: hidden;
+  min-height: 112px;
+  padding: 15px;
+  border-radius: 14px;
+  background: var(--tint);
+}
+.ai-scan-beam {
+  position: absolute;
+  inset: -30% 0 auto;
+  height: 38%;
+  opacity: 0.85;
+  background: linear-gradient(to bottom, transparent, rgba(110, 145, 235, 0.05), rgba(110, 145, 235, 0.5), rgba(110, 145, 235, 0.05), transparent);
+  animation: aiScanBeam 1.5s ease-in-out infinite;
+}
+.ai-working-dot {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  border: 2px solid var(--brand-500);
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: aiSpin 0.8s linear infinite;
+}
+.ai-typing { display: inline-flex; gap: 2px; margin-left: 3px; }
+.ai-typing i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; animation: aiDot 1s ease-in-out infinite; }
+.ai-typing i:nth-child(2) { animation-delay: 0.14s; }.ai-typing i:nth-child(3) { animation-delay: 0.28s; }
+.ai-question-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 48px 0 14px;
+  border: 1px solid var(--ink-100);
+  border-radius: 14px;
+  outline: none;
+  color: var(--ink-900);
+  background: var(--ink-100);
+  font-size: 14px;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+.ai-question-input::placeholder { color: var(--ink-500); }
+.ai-question-input:focus { background: var(--bg-surface); box-shadow: 0 0 0 3px var(--brand-100); }
+.ai-send {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: white;
+  background: var(--brand-500);
+  transition: transform 150ms ease, opacity 150ms ease;
+}
+.ai-send:disabled { opacity: 0.4; }.ai-send:not(:disabled):active { transform: scale(0.92); }
+.ai-finder-thinking { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-finder-thinking span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--ink-500);
+  background: var(--ink-100);
+  font-size: 11px;
+  transition: all 240ms ease;
+}
+.ai-finder-thinking span i { width: 10px; font-style: normal; text-align: center; }
+.ai-finder-thinking .active { color: var(--brand-600); background: var(--brand-50); animation: aiThinking 1.25s ease-in-out infinite; }
+.ai-finder-thinking .complete { color: var(--ok); background: var(--okSoft); }
+.ai-finder-results { display: grid; gap: 6px; }
+.ai-book-match { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 12px; color: var(--ink-700); background: var(--ink-100); transition: transform 160ms ease, background 160ms ease; }
+.ai-book-match:active { transform: scale(0.985); }.ai-book-match strong,.ai-book-match small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.ai-book-match strong { color: var(--ink-900); font-size: 13px; }.ai-book-match small { margin-top: 1px; color: var(--ink-500); font-size: 11px; }.ai-book-spark { color: var(--brand-500); }.ai-nav-spark { position: absolute; top: 7px; right: 7px; width: 5px; height: 5px; border-radius: 50%; background: #8b70e8; box-shadow: 0 0 0 2px var(--bg-base); animation: aiSpark 1.8s ease-in-out infinite; }
+@keyframes aiOrb { 0%,100% { transform: rotate(45deg) scale(0.86); opacity: .7; } 50% { transform: rotate(225deg) scale(1.05); opacity: 1; } }
+@keyframes aiScanBeam { from { transform: translateY(0); } to { transform: translateY(340%); } }
+@keyframes aiSpin { to { transform: rotate(360deg); } }
+@keyframes aiDot { 0%,100% { transform: translateY(0); opacity: .35; } 50% { transform: translateY(-3px); opacity: 1; } }
+@keyframes aiThinking { 50% { transform: translateY(-1px); box-shadow: 0 3px 10px rgba(40,83,175,.13); } }
+@keyframes aiSpark { 50% { transform: scale(1.5); opacity: .5; } }
+
 /* Motion here is decoration, and for a reader who has asked the OS for less of
  * it a bar sweeping every 1.4 seconds is exactly the kind they turned off. The
  * grey boxes still do the layout-reservation half of the job without it. */
 @media (prefers-reduced-motion: reduce) {
-  .skeleton { animation: none; }
+  .skeleton, .ai-orb span, .ai-scan-beam, .ai-working-dot, .ai-typing i, .ai-finder-thinking .active, .ai-nav-spark { animation: none; }
 }
