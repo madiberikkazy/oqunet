@@ -168,13 +168,14 @@ Two things worth knowing:
 
 ## AI book assistant
 
-Set `OPENAI_API_KEY` on this server to enable the two AI-assisted book flows:
+Set `GEMINI_API_KEY` on this server to enable the two AI-assisted book flows:
 an admin can photograph a cover at `POST /ai/book-intake`, and a reader can
 ask the shelf a natural-language question at `POST /ai/book-search`. Both
 routes require a Firebase ID token, keep the API key server-side, and return
 suggestions only; the client remains responsible for reviewing fields and
-creating a book. `OPENAI_MODEL` defaults to `gpt-5.6-luna` and may be changed
-to another vision-capable model available to your project.
+creating a book. `GEMINI_MODEL` defaults to `gemini-2.5-flash-lite` and may be
+changed to another image-capable model available to your Google AI Studio
+project.
 
 The web app reaches these routes through `VITE_PUSH_SERVER` by default. Set
 `VITE_AI_SERVER` only when the AI service is hosted at another origin. In both

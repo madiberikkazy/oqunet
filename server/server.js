@@ -52,8 +52,8 @@ const {
   PORT = 8080,
   TELEGRAM_BOT_TOKEN = "",
   TELEGRAM_WEBHOOK_SECRET = "",
-  OPENAI_API_KEY = "",
-  OPENAI_MODEL = "gpt-5.6-luna",
+  GEMINI_API_KEY = "",
+  GEMINI_MODEL = "gemini-2.5-flash-lite",
 } = process.env;
 // The service-account variables are deliberately not destructured here — see
 // `loadServiceAccount`.
@@ -281,56 +281,84 @@ function isBookImage(dataUrl) {
     dataUrl.length <= 1_000_000;
 }
 
-const BOOK_INTAKE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["name", "author", "year", "pages", "language", "description", "genres"],
-  properties: {
-    name: { type: "string" },
-    author: { type: "string" },
-    year: { type: "string" },
-    // OquNet stores page bands, not an exact count. The client form accepts
-    // these values and still lets the admin correct an uncertain estimate.
-    pages: { type: "number", enum: [0, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600] },
-    language: { type: "string", enum: ["kk", "ru", "en", "tr", "other", ""] },
-    description: { type: "string" },
-    genres: { type: "array", items: { type: "string", enum: ["fiction", "nonfiction", "fantasy", "scifi", "thriller", "mystery", "romance", "adventure", "history", "biography", "science", "selfhelp", "business", "psychology", "philosophy", "children", "classic", "poetry", "horror", "other"] }, maxItems: 3 },
-  },
-};
+/**
+ * One small server-side Gemini client. The key never reaches Vercel or the
+ * browser: callers only ever see the normalized book data below. `inlineData`
+ * keeps a cover photo a one-request input rather than creating a persistent
+ * file object for every scan.
+ */
+async function askGemini({ parts }) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts }],
+        // JSON mode makes parsing predictable; the app still validates which
+        // shelf IDs it accepts and keeps all scanned fields editable.
+        generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
+      }),
+    }
+  );
+  if (!response.ok) {
+    console.error(`gemini rejected: ${response.status}`, await response.text());
+    throw new Error("gemini-upstream-failed");
+  }
+  const body = await response.json();
+  const text = body.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === "string")?.text;
+  if (!text) throw new Error("gemini-empty-response");
+  return JSON.parse(text);
+}
+
+function coverPart(dataUrl) {
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([a-z0-9+/=]+)$/i.exec(dataUrl);
+  if (!match) return null;
+  return { inlineData: { mimeType: match[1], data: match[2] } };
+}
+
+const BOOK_LANGUAGES = new Set(["kk", "ru", "en", "tr", "other"]);
+const BOOK_GENRES = new Set(["fiction", "nonfiction", "fantasy", "scifi", "thriller", "mystery", "romance", "adventure", "history", "biography", "science", "selfhelp", "business", "psychology", "philosophy", "children", "classic", "poetry", "horror", "other"]);
+const PAGE_BANDS = [50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600];
+
+function shortText(value, max) {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+/** Bring an AI suggestion back to the exact fields BookFields accepts. */
+function normalizeScannedBook(raw) {
+  const estimatedPages = Number(raw?.pages);
+  const pages = PAGE_BANDS.find((band) => band >= estimatedPages) || "";
+  const language = shortText(raw?.language, 12);
+  const genres = Array.isArray(raw?.genres)
+    ? [...new Set(raw.genres.map((genre) => shortText(genre, 30)).filter((genre) => BOOK_GENRES.has(genre)))].slice(0, 3)
+    : [];
+  return {
+    name: shortText(raw?.name, 180),
+    author: shortText(raw?.author, 160),
+    year: /^\d{4}$/.test(String(raw?.year || "")) ? String(raw.year) : "",
+    pages,
+    language: BOOK_LANGUAGES.has(language) ? language : "",
+    description: shortText(raw?.description, 1200),
+    genres,
+  };
+}
 
 app.post("/ai/book-intake", express.json({ limit: "2mb" }), async (req, res) => {
-  if (!OPENAI_API_KEY) return res.status(503).json({ error: "ai-not-configured" });
+  if (!GEMINI_API_KEY) return res.status(503).json({ error: "ai-not-configured" });
   const uid = await aiAdminCaller(req);
   if (!uid) return res.status(401).json({ error: "unauthenticated" });
   if (!isBookImage(req.body?.imageDataUrl)) return res.status(400).json({ error: "invalid-image" });
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        store: false,
-        input: [{
-          role: "user",
-          content: [
-            { type: "input_text", text: "Read this book cover. Return only bibliographic facts you can see or confidently infer. Use an empty string for unknown text, 0 pages only when uncertain, a supported language code, and up to three valid genre slugs from the response schema. Write a concise neutral description. Page count must be rounded UP to the nearest 50, max 600." },
-            { type: "input_image", image_url: req.body.imageDataUrl, detail: "high" },
-          ],
-        }],
-        text: { format: { type: "json_schema", name: "book_intake", strict: true, schema: BOOK_INTAKE_SCHEMA } },
-      }),
-    });
-    if (!response.ok) {
-      console.error(`ai intake rejected: ${response.status}`, await response.text());
-      return res.status(502).json({ error: "ai-upstream-failed" });
-    }
-    const body = await response.json();
-    const book = JSON.parse(body.output_text || "{}");
-    if (!book.pages) book.pages = "";
-    res.json({ book });
+    const image = coverPart(req.body.imageDataUrl);
+    const detected = await askGemini({ parts: [
+      { text: "Read this book cover. Return JSON only, with these keys: name, author, year, pages, language, description, genres. Return only bibliographic facts you can see or confidently infer. Unknown text is an empty string; unknown pages is 0. Pages must be a number rounded UP to the nearest 50 (maximum 600). language must be one of kk, ru, en, tr, other, or empty string. genres must contain up to three values from: fiction, nonfiction, fantasy, scifi, thriller, mystery, romance, adventure, history, biography, science, selfhelp, business, psychology, philosophy, children, classic, poetry, horror, other. Write a concise neutral description." },
+      image,
+    ] });
+    res.json({ book: normalizeScannedBook(detected) });
   } catch (err) {
-    console.error("ai intake failed", err?.message);
+    console.error("gemini intake failed", err?.message);
     res.status(502).json({ error: "ai-upstream-failed" });
   }
 });
@@ -349,40 +377,21 @@ function validShelf(rows) {
 }
 
 app.post("/ai/book-search", async (req, res) => {
-  if (!OPENAI_API_KEY) return res.status(503).json({ error: "ai-not-configured" });
+  if (!GEMINI_API_KEY) return res.status(503).json({ error: "ai-not-configured" });
   if (!await aiCaller(req)) return res.status(401).json({ error: "unauthenticated" });
   const question = typeof req.body?.question === "string" ? req.body.question.trim().slice(0, 500) : "";
   const shelf = validShelf(req.body?.books);
   if (!question || !shelf) return res.status(400).json({ error: "invalid-request" });
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        store: false,
-        input: `A reader asked: ${JSON.stringify(question)}\n\nChoose up to 3 books only from this OquNet shelf. Prefer available books, interpret Kazakh, Russian, and English naturally, and never invent a title or id. Shelf: ${JSON.stringify(shelf)}`,
-        text: { format: { type: "json_schema", name: "book_search", strict: true, schema: {
-          type: "object", additionalProperties: false, required: ["bookIds", "answer"], properties: {
-            bookIds: { type: "array", items: { type: "string" }, maxItems: 3 },
-            answer: { type: "string", maxLength: 220 },
-          },
-        } } },
-      }),
-    });
-    if (!response.ok) {
-      console.error(`ai finder rejected: ${response.status}`, await response.text());
-      return res.status(502).json({ error: "ai-upstream-failed" });
-    }
-    const result = JSON.parse((await response.json()).output_text || "{}");
+    const result = await askGemini({ parts: [{ text: `Return JSON only with these keys: bookIds (array of no more than 3 strings) and answer (a short helpful response). A reader asked: ${JSON.stringify(question)}\n\nChoose only from this OquNet shelf. Prefer available books, interpret Kazakh, Russian, and English naturally, and never invent a title or id. Shelf: ${JSON.stringify(shelf)}` }] });
     const validIds = new Set(shelf.map((book) => book.id));
     res.json({
       bookIds: Array.isArray(result.bookIds) ? result.bookIds.filter((id) => validIds.has(id)).slice(0, 3) : [],
       answer: typeof result.answer === "string" ? result.answer.slice(0, 220) : "",
     });
   } catch (err) {
-    console.error("ai finder failed", err?.message);
+    console.error("gemini finder failed", err?.message);
     res.status(502).json({ error: "ai-upstream-failed" });
   }
 });
@@ -408,7 +417,7 @@ app.get("/health", (_req, res) => {
       ready: telegramReady,
     },
     push: { ready: pushReady },
-    ai: { ready: Boolean(OPENAI_API_KEY), model: OPENAI_API_KEY ? OPENAI_MODEL : null },
+    ai: { ready: Boolean(GEMINI_API_KEY), provider: GEMINI_API_KEY ? "gemini" : null, model: GEMINI_API_KEY ? GEMINI_MODEL : null },
   });
 });
 
