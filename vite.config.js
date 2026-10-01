@@ -55,6 +55,12 @@ export default defineConfig({
   // server somewhere free; 5173 stays the default for a plain `npm run dev`.
   server: { port: Number(process.env.PORT) || 5173, open: true },
   build: {
+    // Chrome treats Vite's eager <link rel="modulepreload"> hints as a
+    // different request world after a service worker takes control. The module
+    // imports still fetch exactly the same hashed chunks; skipping the hints
+    // avoids false "preloaded but not used" / cross-world mismatch warnings
+    // in the installed PWA without changing cache correctness.
+    modulePreload: false,
     rollupOptions: { output: { manualChunks } },
   },
 });

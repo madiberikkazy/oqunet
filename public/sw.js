@@ -25,12 +25,16 @@
 // deploy is in flight; giving the shell a new namespace keeps that old HTML
 // paired with its old hashed chunks instead of mixing it with the new build.
 //
+// Bumped to v7: the initial modulepreload hints are intentionally omitted for
+// the PWA. The imports still name content-hashed assets, but the app shell must
+// be refreshed so an offline launch cannot serve HTML containing old hints.
+//
 // Rule of thumb: bump these whenever index.html or manifest.json changes in a
 // way users have to see. Hashed JS/CSS take care of themselves.
-const CACHE_NAME = 'oqunet-v6';
-const ASSET_CACHE = 'oqunet-assets-v6';
-const API_CACHE = 'oqunet-api-v6';
-const IMAGE_CACHE = 'oqunet-images-v6';
+const CACHE_NAME = 'oqunet-v7';
+const ASSET_CACHE = 'oqunet-assets-v7';
+const API_CACHE = 'oqunet-api-v7';
+const IMAGE_CACHE = 'oqunet-images-v7';
 
 // Assets to cache on install (app shell).
 // Deliberately no JS/CSS here: their filenames are content-hashed and change
