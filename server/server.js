@@ -53,7 +53,9 @@ const {
   TELEGRAM_BOT_TOKEN = "",
   TELEGRAM_WEBHOOK_SECRET = "",
   GEMINI_API_KEY = "",
-  GEMINI_MODEL = "gemini-2.5-flash-lite",
+  // Gemini retired 2.5 Flash Lite for new projects. This is the replacement
+  // its API returns for high-volume multimodal requests.
+  GEMINI_MODEL = "gemini-3.5-flash-lite",
 } = process.env;
 // The service-account variables are deliberately not destructured here — see
 // `loadServiceAccount`.

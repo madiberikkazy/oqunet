@@ -173,7 +173,7 @@ an admin can photograph a cover at `POST /ai/book-intake`, and a reader can
 ask the shelf a natural-language question at `POST /ai/book-search`. Both
 routes require a Firebase ID token, keep the API key server-side, and return
 suggestions only; the client remains responsible for reviewing fields and
-creating a book. `GEMINI_MODEL` defaults to `gemini-2.5-flash-lite` and may be
+creating a book. `GEMINI_MODEL` defaults to `gemini-3.5-flash-lite` and may be
 changed to another image-capable model available to your Google AI Studio
 project.
 
